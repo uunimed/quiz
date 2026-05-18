@@ -1,199 +1,654 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ka">
 <head>
     <meta charset="UTF-8">
-    <title>High-End Abstract Waves</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Ernsthaft Deutsch - სერიოზული გერმანულის ტრენაჟორი</title>
+    <!-- Firebase SDKs -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
     <style>
-        body {
+        * {
+            box-sizing: border-box;
             margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background: linear-gradient(135deg, #2b6e4f 0%, #1e5940 100%);
+            font-family: 'Segoe UI', 'Roboto', 'Corbel', sans-serif;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        /* main container - ნათელი ფერები */
+        .app-container {
+            max-width: 1400px;
+            width: 100%;
+            background: rgba(255,245,220,0.92);
+            border-radius: 48px;
+            box-shadow: 0 25px 50px rgba(0,0,0,0.3);
+            padding: 24px;
+            transition: all 0.2s;
+        }
+
+        /* საერთო კარტები */
+        .screen {
+            background: #fffbf0;
+            border-radius: 36px;
+            padding: 28px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+        }
+        .hidden { display: none; }
+
+        h1, h2 {
+            color: #2c5a3a;
+            font-weight: 600;
+            letter-spacing: -0.3px;
+        }
+        h1 { font-size: 2rem; border-left: 8px solid #e6a017; padding-left: 20px; margin-bottom: 20px; }
+
+        /* ღილაკები */
+        button {
+            background: #ffb347;
+            border: none;
+            padding: 12px 28px;
+            font-size: 1rem;
+            font-weight: bold;
+            border-radius: 60px;
+            color: #2d3e2b;
+            cursor: pointer;
+            transition: 0.1s linear;
+            box-shadow: 0 3px 0 #a05e15;
+            font-family: inherit;
+        }
+        button:active { transform: translateY(2px); box-shadow: 0 1px 0 #a05e15; }
+
+        /* mode grid */
+        .modes-grid {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+            justify-content: center;
+            margin: 30px 0;
+        }
+        .mode-card {
+            background: #ffe5b4;
+            flex: 1;
+            min-width: 180px;
+            text-align: center;
+            padding: 28px 16px;
+            border-radius: 32px;
+            cursor: pointer;
+            transition: all 0.2s;
+            border: 2px solid #e6a017;
+        }
+        .mode-card:hover { background: #ffda99; transform: scale(0.98);}
+        .mode-card h3 { font-size: 1.8rem; margin: 8px 0; color: #a55217;}
+
+        /* popup (modal) */
+        .modal-overlay {
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            background: rgba(0,0,0,0.7);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        .modal-box {
+            background: #fff7e8;
+            border-radius: 32px;
+            width: calc(100% - 2cm);
+            height: calc(100% - 2cm);
+            max-width: none;
+            margin: 1cm;
+            display: flex;
+            flex-direction: column;
             overflow: hidden;
-            background-color: #050505; /* ღრმა შავი ფონი */
-            font-family: sans-serif;
+            box-shadow: 0 20px 40px black;
         }
-        canvas {
-            display: block;
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            padding: 20px 28px;
+            background: #ffc971;
+            border-bottom: 3px solid #e6a017;
         }
-        /* დამატებითი overlay ვინეტისთვის (კუთხეების დაბნელება) */
-        .vignette {
-            position: absolute;
+        .modal-content {
+            flex: 1;
+            overflow: auto;
+            padding: 16px;
+        }
+        .fixed-header-table {
+            position: sticky;
             top: 0;
-            left: 0;
+            background: #ffdd99;
+            z-index: 10;
+        }
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.95rem;
+        }
+        .data-table th, .data-table td {
+            padding: 12px 8px;
+            border-bottom: 1px solid #ddb86a;
+            text-align: left;
+            background: #fff3e0;
+        }
+        .data-table th {
+            background: #ffd58c;
+            position: sticky;
+            top: 0;
+        }
+
+        /* game specific */
+        .game-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 24px;
+            margin: 24px 0;
+        }
+        .game-card {
+            background: #f0e2c5;
+            border-radius: 36px;
+            padding: 32px 16px;
+            text-align: center;
+            min-height: 200px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            box-shadow: 0 12px 20px rgba(0,0,0,0.2);
+        }
+        .word-display {
+            font-size: 2.2rem;
+            font-weight: bold;
+            background: #fff0d0;
+            padding: 20px;
+            border-radius: 28px;
+            color: #3b2a1f;
+        }
+        .timer-bar {
+            background: #c9b27c;
+            border-radius: 40px;
+            height: 12px;
+            margin: 16px 0;
+            overflow: hidden;
+        }
+        .timer-fill {
             width: 100%;
             height: 100%;
-            pointer-events: none;
-            background: radial-gradient(circle, rgba(0,0,0,0) 50%, rgba(0,0,0,0.8) 100%);
+            background: #28a745;
+            transition: width 0.1s linear;
+        }
+        .counter-panel {
+            background: #2c5a3a;
+            border-radius: 60px;
+            padding: 12px 24px;
+            text-align: center;
+            color: #ffefcf;
+            font-weight: bold;
+            font-size: 1.4rem;
+            margin: 16px auto;
+            width: fit-content;
+        }
+        .svg-icon {
+            width: 32px;
+            height: 32px;
+            display: inline-block;
+            vertical-align: middle;
+            margin-right: 8px;
+        }
+        .flex-btns { display: flex; gap: 16px; justify-content: center; margin-top: 16px; }
+        .back-btn { background: #8b6946; color: white; box-shadow: none;}
+
+        @media (max-width: 700px) {
+            .game-grid { grid-template-columns: 1fr; }
+            .modal-box { width: calc(100% - 1cm); height: calc(100% - 1cm); margin: 0.5cm; }
         }
     </style>
 </head>
 <body>
-    <div class="vignette"></div>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<div class="app-container" id="appRoot">
+    <!-- შესვლის ეკრანი -->
+    <div id="loginScreen" class="screen">
+        <h1>🔐 ვებ-ტრენაჟორი</h1>
+        <div style="background:#fff0dc; border-radius: 32px; padding: 28px;">
+            <input type="text" id="usernameInput" placeholder="მომხმარებელი" style="width:100%; padding:14px; margin:8px 0; border-radius:60px; border:1px solid #ffb347;">
+            <input type="password" id="passwordInput" placeholder="პაროლი" style="width:100%; padding:14px; margin:8px 0; border-radius:60px;">
+            <button id="loginBtn" style="width:100%; margin-top:12px;">შესვლა</button>
+            <div id="loginError" style="color:#b33; margin-top:12px; text-align:center;"></div>
+        </div>
+    </div>
 
-    <script type="x-shader/x-vertex" id="vertexshader">
-        attribute float scale;
-        void main() {
-            vec4 mvPosition = modelViewMatrix * vec4( position, 1.0 );
-            gl_PointSize = scale * ( 300.0 / - mvPosition.z );
-            gl_Position = projectionMatrix * mvPosition;
+    <!-- რეჟიმების არჩევა -->
+    <div id="modeScreen" class="screen hidden">
+        <div style="display: flex; justify-content: space-between;">
+            <h2>აირჩიე რეჟიმი</h2>
+            <button id="logoutFromMode" class="back-btn">გასვლა</button>
+        </div>
+        <div class="modes-grid">
+            <div class="mode-card" data-mode="wörter"><h3>📖 Wörter</h3><div>სიტყვები</div></div>
+            <div class="mode-card" data-mode="sätze"><h3>✍️ Sätze</h3><div>წინადადებები</div></div>
+            <div class="mode-card" data-mode="verben"><h3>⚡ Trennbare Verben</h3><div>განცალკევებადი ზმნები</div></div>
+            <div class="mode-card" data-mode="präpositionen"><h3>📍 Präpositionen</h3><div>წინდებულები</div></div>
+        </div>
+        <div id="modeActionArea" style="margin-top: 28px; text-align:center;">
+            <button id="showAllWordsBtn" class="hidden" style="background:#5f8b6f;">ყველა სიტყვა</button>
+            <button id="showLearnedBtn" class="hidden" style="background:#5f8b6f;">უკვე ნასწავლი</button>
+        </div>
+    </div>
+
+    <!-- მიმართულების არჩევა (SVG) -->
+    <div id="directionScreen" class="screen hidden">
+        <h2>აირჩიე მიმართულება</h2>
+        <div class="modes-grid">
+            <button class="direction-btn" data-dir="ge-de">
+                <span class="svg-icon"><svg viewBox="0 0 24 24" width="28" height="28" fill="#4a6a3b"><path d="M4 12l4-4v3h12v2H8v3z"/></svg></span> ქართული → გერმანული
+            </button>
+            <button class="direction-btn" data-dir="de-ge">
+                <span class="svg-icon"><svg viewBox="0 0 24 24" width="28" height="28" fill="#4a6a3b"><path d="M20 12l-4 4v-3H4v-2h12V8z"/></svg></span> გერმანული → ქართული
+            </button>
+            <button class="direction-btn" data-dir="mixed">
+                <span class="svg-icon"><svg viewBox="0 0 24 24" width="28" height="28" fill="#4a6a3b"><path d="M6 8l4 4-4 4v-3h8v-2H6zM18 16l-4-4 4-4v3h-8v2h8z"/></svg></span> შერეული
+            </button>
+        </div>
+        <button id="cancelDirectionBtn" class="back-btn">უკან</button>
+    </div>
+
+    <!-- თამაშის ეკრანი -->
+    <div id="gameScreen" class="screen hidden">
+        <div style="display:flex; justify-content:space-between;">
+            <h2 id="gameModeTitle">რეჟიმი</h2>
+            <button id="exitGameBtn" class="back-btn">დასრულება</button>
+        </div>
+        <div class="game-grid">
+            <div class="game-card"><div class="word-display" id="questionWord">---</div><div class="timer-bar"><div id="timerFill" class="timer-fill" style="width:100%"></div></div><div id="timerText" style="font-size:0.9rem;">10.0 წმ</div></div>
+            <div class="game-card" id="translationCard"><div id="targetReveal" style="font-size:1.6rem; font-weight:bold; background:#e2d5b6; padding:20px; border-radius:28px;">???</div></div>
+            <button id="correctBtn" class="game-card" style="background:#5fa83d;">✅ ვიცი</button>
+            <button id="wrongBtn" class="game-card" style="background:#c95a3a;">❌ არ ვიცი</button>
+        </div>
+        <div class="counter-panel" id="counterPanel">ნასწავლი: 0 / 0</div>
+        <div id="gameFeedback" style="text-align:center; margin-top:10px; color:#4a5b2e;"></div>
+    </div>
+</div>
+
+<script>
+    // Firebase config
+    const firebaseConfig = {
+        apiKey: "AIzaSyDWyI0ZiGsT319LHvmk5d9Shvy47_nq8iY",
+        authDomain: "game-9f215.firebaseapp.com",
+        databaseURL: "https://game-9f215-default-rtdb.firebaseio.com",
+        projectId: "game-9f215",
+        storageBucket: "game-9f215.firebasestorage.app",
+        messagingSenderId: "1093599519595",
+        appId: "1:1093599519595:web:89406c19a14ad33ff0a22e",
+        measurementId: "G-W8X9T6EMRQ"
+    };
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+    
+    // ---------- გლობალური მონაცემები ----------
+    let currentUser = "alex";      // hardcoded after login
+    let currentMode = null;         // 'wörter', 'sätze', 'verben', 'präpositionen'
+    let rawDataset = [];            // ობიექტების მასივი { de, ge, extra } extra: for verbs prep...
+    let learnedSet = new Set();      // ინდექსების ნასწავლი (firebase-დან)
+    let allWordsCount = 0;
+    
+    // თამაშის ცვლადები
+    let activeGame = false;
+    let gameItems = [];              // shuffled { de, ge, originalIndex, displayQuestion, displayAnswer }
+    let currentGameIndex = 0;
+    let learnedInSession = 0;
+    let gameDirection = null;
+    let timerInterval = null;
+    let timeLeft = 10;
+    let phase = "thinking";          // "thinking" (0-7s) or "revealed" (7-10s)
+    let currentQuestionObj = null;
+    let correctAnswered = false;     // whether user already answered in current card
+    let totalGameCards = 0;
+    
+    // DOM elements
+    const loginScreen = document.getElementById('loginScreen');
+    const modeScreen = document.getElementById('modeScreen');
+    const directionScreen = document.getElementById('directionScreen');
+    const gameScreen = document.getElementById('gameScreen');
+    const usernameInput = document.getElementById('usernameInput');
+    const passwordInput = document.getElementById('passwordInput');
+    const loginBtn = document.getElementById('loginBtn');
+    const loginErrorDiv = document.getElementById('loginError');
+    const logoutBtn = document.getElementById('logoutFromMode');
+    const modeCards = document.querySelectorAll('.mode-card');
+    const showAllBtn = document.getElementById('showAllWordsBtn');
+    const showLearnedBtn = document.getElementById('showLearnedBtn');
+    const startGameFromMode = document.getElementById('startGameFromModeBtn') || (()=>{let b=document.createElement('button'); return b;})();
+    const cancelDirectionBtn = document.getElementById('cancelDirectionBtn');
+    const exitGameBtn = document.getElementById('exitGameBtn');
+    const correctGameBtn = document.getElementById('correctBtn');
+    const wrongGameBtn = document.getElementById('wrongBtn');
+    const questionWordSpan = document.getElementById('questionWord');
+    const targetRevealSpan = document.getElementById('targetReveal');
+    const counterPanelSpan = document.getElementById('counterPanel');
+    const gameFeedbackSpan = document.getElementById('gameFeedback');
+    const timerFillDiv = document.getElementById('timerFill');
+    const timerTextSpan = document.getElementById('timerText');
+    const gameModeTitleSpan = document.getElementById('gameModeTitle');
+    
+    // popup modal functions
+    function showPopup(title, tableHtml, isFullTable = true) {
+        const overlay = document.createElement('div');
+        overlay.className = 'modal-overlay';
+        const modalDiv = document.createElement('div');
+        modalDiv.className = 'modal-box';
+        modalDiv.innerHTML = `<div class="modal-header"><h3>${title}</h3><button id="closeModalBtn" style="background:#b95f2a;">✖ დახურვა</button></div><div class="modal-content"><div class="scrollable-table" style="overflow:auto; height:100%;">${tableHtml}</div></div>`;
+        overlay.appendChild(modalDiv);
+        document.body.appendChild(overlay);
+        document.getElementById('closeModalBtn').onclick = () => overlay.remove();
+        overlay.onclick = (e) => { if(e.target === overlay) overlay.remove(); };
+    }
+    
+    // ცხრილის გენერატორი (სვეტების გაყინვა)
+    function generateTableFromData(data, columns) {
+        if(!data.length) return '<p>მონაცემები ვერ მოიძებნა</p>';
+        let html = `<table class="data-table"><thead><tr>`;
+        columns.forEach(col => html += `<th style="position:sticky; top:0; background:#ffd58c;">${col}</th>`);
+        html += `</tr></thead><tbody>`;
+        for(let row of data){
+            html += `<tr>`;
+            columns.forEach(col => html += `<td>${escapeHtml(row[col] || '')}</td>`);
+            html += `</tr>`;
         }
-    </script>
-
-    <script type="x-shader/x-fragment" id="fragmentshader">
-        uniform vec3 color;
-        void main() {
-            if ( length( gl_PointCoord - vec2( 0.5, 0.5 ) ) > 0.475 ) discard;
-            gl_FragColor = vec4( color, 1.0 );
-        }
-    </script>
-
-    <script>
-        let SEPARATION = 100, AMOUNTX = 50, AMOUNTY = 50;
-        let container;
-        let camera, scene, renderer;
-        let particles, count = 0;
-        let mouseX = 0, mouseY = 0;
-        let windowHalfX = window.innerWidth / 2;
-        let windowHalfY = window.innerHeight / 2;
-        
-        // ფერების ცვლადები
-        let hue = 0;
-
-        init();
-        animate();
-
-        function init() {
-            container = document.createElement('div');
-            document.body.appendChild(container);
-
-            // კამერის პარამეტრები (ხედვის კუთხე და პოზიცია)
-            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 1, 10000);
-            camera.position.z = 1000;
-            camera.position.y = 300;
-
-            scene = new THREE.Scene();
-
-            // ნაწილაკების (ხაზების წერტილების) რაოდენობა
-            const numParticles = AMOUNTX * AMOUNTY;
-            const positions = new Float32Array(numParticles * 3);
-            const scales = new Float32Array(numParticles);
-
-            let i = 0, j = 0;
-
-            // ბადის შექმნა
-            for (let ix = 0; ix < AMOUNTX; ix++) {
-                for (let iy = 0; iy < AMOUNTY; iy++) {
-                    positions[i] = ix * SEPARATION - ((AMOUNTX * SEPARATION) / 2); // x
-                    positions[i + 1] = 0; // y (სიმაღლე, რომელსაც ანიმაციაში შევცვლით)
-                    positions[i + 2] = iy * SEPARATION - ((AMOUNTY * SEPARATION) / 2); // z
-                    scales[j] = 1;
-                    i += 3;
-                    j++;
+        html += `</tbody></table>`;
+        return html;
+    }
+    function escapeHtml(str){ if(!str) return ''; return str.replace(/[&<>]/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;'})[m]);}
+    
+    // მონაცემთა ჩატვირთვა CSV-დან (Google sheets)
+    const CSV_URLS = {
+        wörter: "https://docs.google.com/spreadsheets/d/e/2PACX-1vQ9inVdkMI1lxmQT54g-dwz-UOFFnoSNnKFKZhS28-SFr99F6p7kYIxkbxg0Q9uXosqiuKCcXIe41pZ/pub?gid=0&single=true&output=csv",
+        sätze: "https://docs.google.com/spreadsheets/d/e/2PACX-1vQ9inVdkMI1lxmQT54g-dwz-UOFFnoSNnKFKZhS28-SFr99F6p7kYIxkbxg0Q9uXosqiuKCcXIe41pZ/pub?gid=244115839&single=true&output=csv",
+        verben: "https://docs.google.com/spreadsheets/d/e/2PACX-1vQ9inVdkMI1lxmQT54g-dwz-UOFFnoSNnKFKZhS28-SFr99F6p7kYIxkbxg0Q9uXosqiuKCcXIe41pZ/pub?gid=1086232285&single=true&output=csv",
+        präpositionen: "https://docs.google.com/spreadsheets/d/e/2PACX-1vQ9inVdkMI1lxmQT54g-dwz-UOFFnoSNnKFKZhS28-SFr99F6p7kYIxkbxg0Q9uXosqiuKCcXIe41pZ/pub?gid=1810482362&single=true&output=csv"
+    };
+    
+    async function loadModeData(modeKey) {
+        const url = CSV_URLS[modeKey];
+        if(!url) return [];
+        try{
+            const resp = await fetch(url);
+            const text = await resp.text();
+            const rows = text.split(/\r?\n/).filter(r=>r.trim());
+            if(rows.length<2) return [];
+            const headers = rows[0].split(',').map(h=>h.trim().replace(/^"|"$/g,''));
+            let deIdx = headers.findIndex(h=>h.toLowerCase().includes('deutsch')||h==='de');
+            let geIdx = headers.findIndex(h=>h.toLowerCase().includes('georgisch')||h==='ge');
+            if(deIdx===-1) deIdx=0; if(geIdx===-1) geIdx=1;
+            let items = [];
+            for(let i=1;i<rows.length;i++){
+                let cols = parseCSV(rows[i]);
+                if(cols.length<=Math.max(deIdx,geIdx)) continue;
+                let de = cleanNumberPrefix(cols[deIdx].replace(/^"|"$/g,'').trim());
+                let ge = cols[geIdx].replace(/^"|"$/g,'').trim();
+                if(de && ge){
+                    let extra = {};
+                    if(modeKey==='verben' && cols.length>2){
+                        extra.praefix = cols[0]||'';
+                        extra.verb = cols[1]||'';
+                        extra.mainDef = cols[2]||'';
+                        extra.georgianDef = ge;
+                        de = `${extra.praefix} ${extra.verb}`;
+                        ge = extra.georgianDef;
+                    }
+                    else if(modeKey==='präpositionen' && cols.length>2){
+                        let verb = cols[0]||'';
+                        let prep = cols[1]||'';
+                        let kasus = cols[2]||'';
+                        let uebers = cols[3]||'';
+                        de = `${prep} ${kasus} ${uebers}`;
+                        ge = verb;
+                        extra.prepPhrase = de;
+                    }
+                    else if(modeKey==='wörter' && cols.length>=4){
+                        extra.praeteritum = cols[2]||'';
+                        extra.perfekt = cols[3]||'';
+                        if(extra.praeteritum || extra.perfekt) de = `${de} (${extra.praeteritum}, ${extra.perfekt})`;
+                    }
+                    items.push({ de, ge, originalIndex: items.length, extra });
                 }
             }
-
-            const geometry = new THREE.BufferGeometry();
-            geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-            geometry.setAttribute('scale', new THREE.BufferAttribute(scales, 1));
-
-            // მასალა - აქ ვიყენებთ წერტილებს, რომლებიც ქმნიან ხაზოვან ილუზიას
-            // უფრო "სუფთა" ხაზებისთვის შეგვიძლია გამოვიყენოთ PointsMaterial
-            const material = new THREE.PointsMaterial({
-                color: 0xffffff,
-                size: 3, // წერტილის ზომა
-                transparent: true,
-                opacity: 0.8,
-                blending: THREE.AdditiveBlending // მანათობელი ეფექტი
-            });
-
-            particles = new THREE.Points(geometry, material);
-            scene.add(particles);
-
-            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true }); // მაღალი ხარისხის რენდერი
-            renderer.setPixelRatio(window.devicePixelRatio);
-            renderer.setSize(window.innerWidth, window.innerHeight);
-            container.appendChild(renderer.domElement);
-
-            // მაუსის მოძრაობაზე რეაგირება (პარალაქსის ეფექტი)
-            document.addEventListener('mousemove', onDocumentMouseMove, false);
-            document.addEventListener('touchstart', onDocumentTouchStart, false);
-            document.addEventListener('touchmove', onDocumentTouchMove, false);
-            window.addEventListener('resize', onWindowResize, false);
+            return items;
+        } catch(e){ showErrorPopup("ჩატვირთვის შეცდომა: "+e.message); return [];}
+    }
+    function parseCSV(line){ let res=[], cur='', inQ=false; for(let i=0;i<line.length;i++){let c=line[i]; if(c==='"') inQ=!inQ; else if(c===',' && !inQ){res.push(cur); cur='';} else cur+=c;} res.push(cur); return res; }
+    function cleanNumberPrefix(str){ return str.replace(/^\d+\.\s*/, ''); }
+    
+    // Firebase: ნასწავლი სიტყვების სინქრონიზაცია (ინდექსებით)
+    async function loadLearnedFromFirebase(){
+        if(!currentUser) return;
+        const snapshot = await db.ref(`users/${currentUser}/learned/${currentMode}`).once('value');
+        const data = snapshot.val() || {};
+        learnedSet = new Set(Object.keys(data).filter(k=>data[k]===true).map(Number));
+        updateLearnedUI();
+    }
+    async function saveLearnedIndex(index){
+        if(!currentUser || !currentMode) return;
+        await db.ref(`users/${currentUser}/learned/${currentMode}/${index}`).set(true);
+        learnedSet.add(index);
+        updateLearnedUI();
+    }
+    function updateLearnedUI(){
+        if(counterPanelSpan) counterPanelSpan.innerText = `ნასწავლი: ${learnedSet.size} / ${rawDataset.length}`;
+    }
+    
+    // ცხრილის ჩვენება (popup)
+    function showAllWordsPopup(){ 
+        if(!rawDataset.length){ showErrorPopup("მონაცემები ვერ მოიძებნა"); return; }
+        let tableData = rawDataset.map((item,idx)=>({ დაბურული: item.de, ქართული: item.ge }));
+        let html = generateTableFromData(tableData, ['დაბურული','ქართული']);
+        showPopup("📚 ყველა სიტყვა", html);
+    }
+    function showLearnedPopup(){
+        let learnedItems = rawDataset.filter((_,idx)=>learnedSet.has(idx));
+        if(!learnedItems.length){ showErrorPopup("ჯერ არაფერი გისწავლია ამ რეჟიმში"); return; }
+        let tableData = learnedItems.map(item=>({ დაბურული: item.de, ქართული: item.ge }));
+        let html = generateTableFromData(tableData, ['დაბურული','ქართული']);
+        showPopup("⭐ ნასწავლი სიტყვები", html);
+    }
+    function showErrorPopup(msg){ 
+        const overlay = document.createElement('div'); overlay.className='modal-overlay';
+        const div = document.createElement('div'); div.style.background='#fff0e0'; div.style.padding='2rem'; div.style.borderRadius='32px'; div.style.maxWidth='400px';
+        div.innerHTML = `<h3>⚠️ შეტყობინება</h3><p>${msg}</p><button id="okErrBtn">OK</button>`;
+        overlay.appendChild(div); document.body.appendChild(overlay);
+        document.getElementById('okErrBtn').onclick = ()=>overlay.remove();
+    }
+    
+    // თამაშის ლოგიკა
+    async function startGameWithDirection(direction){
+        if(!rawDataset.length){ showErrorPopup("მონაცემები არ არის"); return false; }
+        gameDirection = direction;
+        // shuffled
+        gameItems = [...rawDataset].map((item,idx)=>({ ...item, originalIndex: idx }));
+        for(let i=gameItems.length-1;i>0;i--){ let j=Math.floor(Math.random()*(i+1)); [gameItems[i],gameItems[j]]=[gameItems[j],gameItems[i]]; }
+        currentGameIndex = 0;
+        learnedInSession = learnedSet.size;
+        activeGame = true;
+        correctAnswered = false;
+        if(timerInterval) clearInterval(timerInterval);
+        renderNextCard();
+        return true;
+    }
+    
+    function renderNextCard(){
+        if(!activeGame) return;
+        if(currentGameIndex >= gameItems.length){
+            activeGame=false; gameFeedbackSpan.innerText="თამაში დასრულდა! შესანიშნავი შედეგი.";
+            if(timerInterval) clearInterval(timerInterval);
+            return;
         }
-
-        function onWindowResize() {
-            windowHalfX = window.innerWidth / 2;
-            windowHalfY = window.innerHeight / 2;
-            camera.aspect = window.innerWidth / window.innerHeight;
-            camera.updateProjectionMatrix();
-            renderer.setSize(window.innerWidth, window.innerHeight);
+        const item = gameItems[currentGameIndex];
+        let questionText = '', answerText = '';
+        if(gameDirection === 'ge-de'){ questionText = item.ge; answerText = item.de; }
+        else if(gameDirection === 'de-ge'){ questionText = item.de; answerText = item.ge; }
+        else { // mixed
+            let r = Math.random()<0.5;
+            if(r){ questionText=item.ge; answerText=item.de; } else { questionText=item.de; answerText=item.ge; }
         }
-
-        function onDocumentMouseMove(event) {
-            mouseX = event.clientX - windowHalfX;
-            mouseY = event.clientY - windowHalfY;
+        currentQuestionObj = { question: questionText, answer: answerText, index: item.originalIndex, item };
+        questionWordSpan.innerText = questionText;
+        targetRevealSpan.innerText = "???";
+        targetRevealSpan.style.filter = "blur(0px)";
+        correctAnswered = false;
+        timeLeft = 10;
+        phase = "thinking";
+        updateTimerUI();
+        if(timerInterval) clearInterval(timerInterval);
+        timerInterval = setInterval(updateTimer, 100);
+        gameFeedbackSpan.innerText = "დაფიქრდი (7 წმ), შემდეგ გამოჩნდება პასუხი";
+    }
+    
+    function updateTimer(){
+        if(!activeGame || correctAnswered) return;
+        if(timeLeft <= 0){
+            clearInterval(timerInterval);
+            if(!correctAnswered) autoTimeout();
+            return;
         }
-
-        function onDocumentTouchStart(event) {
-            if (event.touches.length === 1) {
-                event.preventDefault();
-                mouseX = event.touches[0].pageX - windowHalfX;
-                mouseY = event.touches[0].pageY - windowHalfY;
-            }
+        timeLeft -= 0.1;
+        if(timeLeft <= 0) timeLeft=0;
+        updateTimerUI();
+        if(phase === "thinking" && timeLeft <= 7.0 && timeLeft > 0){
+            phase = "revealed";
+            targetRevealSpan.innerText = currentQuestionObj.answer;
+            gameFeedbackSpan.innerText = "ახლა უკვე ნახე პასუხი, თუ იცოდი დააჭირე 'ვიცი' (3 წმ)";
         }
-
-        function onDocumentTouchMove(event) {
-            if (event.touches.length === 1) {
-                event.preventDefault();
-                mouseX = event.touches[0].pageX - windowHalfX;
-                mouseY = event.touches[0].pageY - windowHalfY;
-            }
+        if(timeLeft <= 0 && !correctAnswered) autoTimeout();
+    }
+    
+    function autoTimeout(){
+        if(correctAnswered) return;
+        correctAnswered = true;
+        clearInterval(timerInterval);
+        gameFeedbackSpan.innerText = "დრო ამოიწურა → ჩაითვალა 'არ ვიცი'";
+        const currentIdx = currentQuestionObj.index;
+        if(!learnedSet.has(currentIdx)){
+            // არ დაემატება
         }
-
-        function animate() {
-            requestAnimationFrame(animate);
-            render();
+        moveToNextCard();
+    }
+    
+    function handleKnow(){
+        if(!activeGame || correctAnswered) return;
+        correctAnswered = true;
+        clearInterval(timerInterval);
+        const idx = currentQuestionObj.index;
+        if(!learnedSet.has(idx)){
+            saveLearnedIndex(idx);
+            learnedSet.add(idx);
+            updateLearnedUI();
         }
-
-        function render() {
-            // კამერის ნაზი მოძრაობა მაუსის მიხედვით
-            camera.position.x += (mouseX - camera.position.x) * 0.05;
-            camera.position.y += (-mouseY + 200 - camera.position.y) * 0.05;
-            camera.lookAt(scene.position);
-
-            const positions = particles.geometry.attributes.position.array;
-            const scales = particles.geometry.attributes.scale.array;
-
-            // ტალღოვანი მოძრაობის მათემატიკა
-            let i = 0, j = 0;
-            for (let ix = 0; ix < AMOUNTX; ix++) {
-                for (let iy = 0; iy < AMOUNTY; iy++) {
-                    // სინუსოიდური ტალღების კომბინაცია რთული რელიეფისთვის
-                    positions[i + 1] = (Math.sin((ix + count) * 0.3) * 50) +
-                                       (Math.sin((iy + count) * 0.5) * 50);
-                    
-                    // ზომის ცვლილება სიღრმის მიხედვით
-                    scales[j] = (Math.sin((ix + count) * 0.3) + 1) * 2 +
-                                (Math.sin((iy + count) * 0.5) + 1) * 2;
-                    i += 3;
-                    j++;
-                }
-            }
-
-            particles.geometry.attributes.position.needsUpdate = true;
-            particles.geometry.attributes.scale.needsUpdate = true;
-
-            // ფერების დინამიური ცვლილება (HSL)
-            hue += 0.002; // ფერის ცვლილების სიჩქარე
-            if (hue > 1) hue = 0;
-            
-            // ფერის დაყენება: აქ ვიყენებთ მოცისფრო-მწვანე სპექტრს (როგორც თქვენს ფოტოზეა)
-            // შეგიძლიათ შეცვალოთ setHSL პარამეტრები სხვა ფერებისთვის
-            // (hue, saturation, lightness)
-            particles.material.color.setHSL(hue, 0.8, 0.6); 
-
-            count += 0.05; // ტალღის სიჩქარე
-            renderer.render(scene, camera);
-        }
-    </script>
+        gameFeedbackSpan.innerText = "✅ მონიშნულია როგორც ვიცი!";
+        moveToNextCard();
+    }
+    function handleDontKnow(){
+        if(!activeGame || correctAnswered) return;
+        correctAnswered = true;
+        clearInterval(timerInterval);
+        gameFeedbackSpan.innerText = "❌ მონიშნულია არ ვიცი, სიტყვა კვლავ გამოჩნდება";
+        // push current to end for repetition
+        if(currentGameIndex < gameItems.length){
+            let currentItem = gameItems[currentGameIndex];
+            gameItems.splice(currentGameIndex,1);
+            gameItems.push(currentItem);
+        } else moveToNextCard();
+        moveToNextCard();
+    }
+    function moveToNextCard(){
+        if(!activeGame) return;
+        if(currentGameIndex >= gameItems.length) { activeGame=false; return; }
+        currentGameIndex++;
+        renderNextCard();
+    }
+    function updateTimerUI(){
+        let percent = (timeLeft/10)*100;
+        timerFillDiv.style.width = `${Math.max(0,percent)}%`;
+        timerTextSpan.innerText = `${timeLeft.toFixed(1)} წმ`;
+        if(timeLeft<=3 && phase==="revealed") timerFillDiv.style.backgroundColor="#dc3545";
+        else timerFillDiv.style.backgroundColor="#28a745";
+    }
+    
+    // UI flow
+    loginBtn.onclick = ()=>{
+        let user = usernameInput.value.trim();
+        let pwd = passwordInput.value.trim();
+        if(user === 'alex' && pwd === '2911'){
+            currentUser = user;
+            loginScreen.classList.add('hidden');
+            modeScreen.classList.remove('hidden');
+            directionScreen.classList.add('hidden');
+            gameScreen.classList.add('hidden');
+            currentMode = null;
+            showAllBtn.classList.add('hidden');
+            showLearnedBtn.classList.add('hidden');
+        } else loginErrorDiv.innerText = 'მომხმარებელი ან პაროლი არასწორია';
+    };
+    logoutBtn.onclick = ()=>{ location.reload(); };
+    
+    modeCards.forEach(card=>{
+        card.onclick = async ()=>{
+            let mode = card.getAttribute('data-mode');
+            currentMode = mode;
+            let modeName = {wörter:'სიტყვები', sätze:'წინადადებები', verben:'ზმნები', präpositionen:'წინდებულები'}[mode];
+            gameModeTitleSpan.innerText = `რეჟიმი: ${modeName}`;
+            rawDataset = await loadModeData(mode);
+            allWordsCount = rawDataset.length;
+            await loadLearnedFromFirebase();
+            showAllBtn.classList.remove('hidden');
+            showLearnedBtn.classList.remove('hidden');
+            showAllBtn.onclick = ()=>showAllWordsPopup();
+            showLearnedBtn.onclick = ()=>showLearnedPopup();
+            // start button creation
+            let existingStart = document.getElementById('dynamicStartBtn');
+            if(existingStart) existingStart.remove();
+            let startBtn = document.createElement('button');
+            startBtn.id = 'dynamicStartBtn';
+            startBtn.innerText = 'დაწყება';
+            startBtn.style.background = '#5f9e6e';
+            startBtn.style.marginTop = '20px';
+            startBtn.onclick = ()=>{
+                if(rawDataset.length===0){ showErrorPopup("მონაცემები არ ჩაიტვირთა"); return; }
+                modeScreen.classList.add('hidden');
+                directionScreen.classList.remove('hidden');
+            };
+            document.getElementById('modeActionArea').appendChild(startBtn);
+        };
+    });
+    cancelDirectionBtn.onclick = ()=>{ directionScreen.classList.add('hidden'); modeScreen.classList.remove('hidden'); };
+    const dirBtns = document.querySelectorAll('.direction-btn');
+    dirBtns.forEach(btn=>{
+        btn.onclick = async ()=>{
+            let dir = btn.getAttribute('data-dir');
+            directionScreen.classList.add('hidden');
+            let ok = await startGameWithDirection(dir);
+            if(ok) gameScreen.classList.remove('hidden');
+            else { modeScreen.classList.remove('hidden'); showErrorPopup("ვერ ჩაიტვირთა თამაში"); }
+        };
+    });
+    exitGameBtn.onclick = ()=>{
+        if(timerInterval) clearInterval(timerInterval);
+        activeGame=false;
+        gameScreen.classList.add('hidden');
+        modeScreen.classList.remove('hidden');
+    };
+    correctGameBtn.onclick = handleKnow;
+    wrongGameBtn.onclick = handleDontKnow;
+    
+    // extra security: remove numbering from words in dataset preload
+    function cleanNumberPrefix(str){ return str.replace(/^\d+\.\s*/, ''); }
+</script>
 </body>
 </html>
