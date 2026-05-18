@@ -682,11 +682,28 @@ if(modeKey === 'wörter' && cols.length>=4){
         counterPanelSpan.innerText = `ნასწავლი: ${learnedSet.size} / ${rawDataset.length}`;
     }
     
-    function formatDisplayWord(item) {
+function formatDisplayWord(item) {
         let deutschDisplay = item.de;
-        if(currentMode === 'wörter' && item.extra.verbForms) {
-            deutschDisplay = `${item.de}<div class="verb-extra">${item.extra.verbForms}</div>`;
+        
+        // თუ ვართ Wörter რეჟიმში და სიტყვას აქვს დამატებითი ფორმები
+        if(currentMode === 'wörter' && (item.extra.praet || item.extra.perf)) {
+            deutschDisplay = `
+                <div style="display: flex; flex-direction: column; align-items: center; gap: 12px;">
+                    <div>${item.de}</div>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; width: 100%; border-top: 1px dashed #cbd5e1; padding-top: 12px;">
+                        <div style="text-align: center;">
+                            <div style="font-size: 0.8rem; color: #64748b; text-transform: uppercase;">Präteritum (3. Person)</div>
+                            <div style="font-size: 1.1rem; font-weight: 600; color: #475569; margin-top: 4px;">${item.extra.praet || '-'}</div>
+                        </div>
+                        <div style="text-align: center;">
+                            <div style="font-size: 0.8rem; color: #64748b; text-transform: uppercase;">Perfekt (er/sie)</div>
+                            <div style="font-size: 1.1rem; font-weight: 600; color: #475569; margin-top: 4px;">${item.extra.perf || '-'}</div>
+                        </div>
+                    </div>
+                </div>
+            `;
         }
+        
         if(currentMode === 'verben' && item.extra.prefix) {
             deutschDisplay = `<span class="prefixed-word"><span class="prefix-highlight">${item.extra.prefix}</span>${item.extra.baseVerb}</span><div class="verb-extra">${item.extra.mainDef}</div>`;
         }
@@ -699,6 +716,7 @@ if(modeKey === 'wörter' && cols.length>=4){
 // ცხრილის გენერატორი, რომელიც რეჟიმის მიხედვით ცვლის სვეტებს
     function getTableHTML(dataset) {
         let columns, tableRows;
+        
         if (currentMode === 'wörter') {
             columns = ['Deutsch', 'Präteritum (3. Person)', 'Perfekt (er/sie)', 'Georgisch'];
             tableRows = dataset.map(item => ({
@@ -707,16 +725,37 @@ if(modeKey === 'wörter' && cols.length>=4){
                 'Perfekt (er/sie)': item.extra.perf || '',
                 'Georgisch': item.ge
             }));
-        } else {
+        } 
+        else if (currentMode === 'verben') {
+            columns = ['Präfix', 'Verb', 'Hauptdefinition', 'Georgische Übersetzung'];
+            tableRows = dataset.map(item => ({
+                'Präfix': item.extra.prefix || '',
+                'Verb': item.extra.baseVerb || '',
+                'Hauptdefinition': item.extra.mainDef || '',
+                'Georgische Übersetzung': item.ge
+            }));
+        } 
+        else if (currentMode === 'präpositionen') {
+            // ახალი ცხრილის სტრუქტურა პრეპოზიციებისთვის
+            columns = ['das Verb', 'Präposition', 'Kasus', 'Übersetzung'];
+            tableRows = dataset.map(item => ({
+                'das Verb': item.ge,
+                'Präposition': item.extra.prep || '',
+                'Kasus': item.extra.kasus || '',
+                'Übersetzung': item.extra.meaning || ''
+            }));
+        }
+        else {
+            // Sätze და სხვა შესაძლო რეჟიმებისთვის რჩება სტანდარტული 2-სვეტიანი ფორმატი
             columns = ['Deutsch', 'Georgisch'];
             tableRows = dataset.map(item => ({
                 'Deutsch': formatDisplayWord(item),
                 'Georgisch': item.ge
             }));
         }
+        
         return generateTable(tableRows, columns);
     }
-
     function showAllWordsPopup(){
         if(!rawDataset.length){ showErrorPopup("მონაცემები ვერ მოიძებნა"); return; }
         showPopup(`${icons.book} ყველა სიტყვა`, getTableHTML(rawDataset));
@@ -771,7 +810,7 @@ function showLearnedPopup(){
         return true;
     }
     
-    function renderNextCard(){
+function renderNextCard(){
         if(!activeGame) return;
         if(currentGameIndex >= gameItems.length){
             activeGame=false; gameFeedbackSpan.innerText="გილოცავთ! თამაში დასრულდა!";
@@ -779,20 +818,35 @@ function showLearnedPopup(){
             return;
         }
         const item = gameItems[currentGameIndex];
-        let questionText = '', answerText = '';
         
-        if(gameDirection === 'ge-de'){ questionText = item.ge; answerText = item.de; }
-        else if(gameDirection === 'de-ge'){ questionText = item.de; answerText = item.ge; }
-        else { let r = Math.random()<0.5; if(r){ questionText=item.ge; answerText=item.de; } else { questionText=item.de; answerText=item.ge; } }
+        // 1. ვაგენერირებთ ორივე ენის ვიზუალს
+        let deHTML = formatDisplayWord(item); // გერმანული თავისი მინი-ცხრილით
+        let geHTML = item.ge;                 // ქართული თარგმანი
         
-        currentQuestionObj = { question: questionText, answer: answerText, index: item.originalIndex, item };
+        let questionHTML = ''; 
+        let answerHTML = '';
         
-        // Setup initial display
-        questionWordSpan.innerText = questionText;
+        // 2. ვანაწილებთ კითხვასა და პასუხს არჩეული მიმართულების მიხედვით
+        if(gameDirection === 'ge-de'){ 
+            questionHTML = geHTML; 
+            answerHTML = deHTML; 
+        }
+        else if(gameDirection === 'de-ge'){ 
+            questionHTML = deHTML; 
+            answerHTML = geHTML; 
+        }
+        else { 
+            let r = Math.random() < 0.5; 
+            if(r){ questionHTML = geHTML; answerHTML = deHTML; } 
+            else { questionHTML = deHTML; answerHTML = geHTML; } 
+        }
         
-        let displayAnswer = formatDisplayWord(item);
-        // Initially set it as blurred
-        targetRevealSpan.innerHTML = displayAnswer;
+        currentQuestionObj = { index: item.originalIndex, item };
+        
+        // 3. გამომაქვს შესაბამისი HTML ეკრანზე (აქ იყო წინა კოდში პრობლემა ჩარჩენილი)
+        questionWordSpan.innerHTML = questionHTML;
+        
+        targetRevealSpan.innerHTML = answerHTML;
         targetRevealSpan.className = "target-box blurred-text"; 
         
         correctAnswered = false;
