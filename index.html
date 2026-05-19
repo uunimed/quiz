@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Ernsthaft Deutsch - სერიოზული გერმანულის ტრენაჟორი</title>
+    <title>Deutsches Quiz</title>
     <!-- Firebase SDKs -->
     <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
@@ -363,26 +363,69 @@
             }
             
             /* Game Grid */
-            .game-grid { grid-template-columns: 1fr; gap: 16px; margin: 16px 0; }
-            .game-card { min-height: 160px; padding: 20px 16px; }
-            .word-display { font-size: 1.5rem; padding: 16px; }
-            .target-box { font-size: 1.3rem; padding: 16px; }
+            .game-grid { grid-template-columns: 1fr; gap: 12px; margin: 12px 0; }
+            .game-card { min-height: auto; padding: 16px 12px; }
+            .word-display { font-size: 1.4rem; padding: 12px; }
+            .target-box { font-size: 1.2rem; padding: 12px; }
             
+            /* Game Action Buttons (Correct / Wrong) */
+            #correctBtn, #wrongBtn {
+                flex-direction: row !important; /* ჰორიზონტალურად განლაგება სიმაღლის დასაზოგად */
+                padding: 12px !important;
+                min-height: auto;
+            }
+            #correctBtn .svg-icon, #wrongBtn .svg-icon {
+                margin-bottom: 0 !important;
+                margin-right: 8px;
+            }
+            #correctBtn .svg-icon svg, #wrongBtn .svg-icon svg {
+                width: 24px !important; 
+                height: 24px !important;
+            }
             #correctBtn span[style*="font-size: 1.4rem"], 
             #wrongBtn span[style*="font-size: 1.4rem"] {
-                font-size: 1.2rem !important;
+                font-size: 1.1rem !important;
             }
 
             /* Modals (Tables) */
             .modal-box { width: calc(100% - 0.4cm); height: calc(100% - 0.4cm); border-radius: 16px; }
+            
+            /* განახლებული Modal Header (ერთ ხაზზე ჩამოსაწკრივებლად) */
             .modal-header { 
-                padding: 16px; 
-                flex-direction: column; 
-                align-items: stretch; 
-                gap: 12px; 
+                padding: 12px 14px; 
+                flex-direction: row; /* ერთ ხაზზე */
+                align-items: center; 
+                gap: 8px; 
             }
-            .modal-header > div { justify-content: space-between; }
-            .data-table th, .data-table td { padding: 12px 14px; font-size: 0.85rem; }
+            .modal-header h3 { 
+                font-size: 1rem !important; /* სათაურის დაპატარავება */
+                margin: 0;
+                gap: 4px;
+                white-space: nowrap;
+            }
+            .modal-header h3 svg {
+                width: 18px !important;
+                height: 18px !important;
+            }
+            .modal-header > div { 
+                display: flex;
+                justify-content: flex-end;
+                gap: 6px !important; /* ღილაკებს შორის მცირე დაშორება */
+            }
+            /* მოდალურ ფანჯარაში არსებული ღილაკების დაპატარავება */
+            .modal-header button {
+                padding: 6px 10px !important;
+                font-size: 0.75rem !important;
+                white-space: nowrap;
+                min-width: auto;
+                gap: 4px;
+            }
+            .modal-header button .svg-icon svg {
+                width: 14px !important;
+                height: 14px !important;
+            }
+
+            .data-table th, .data-table td { padding: 10px 12px; font-size: 0.85rem; }
         }
     </style>
 </head>
@@ -448,7 +491,7 @@
             </button>
             <button id="showLearnedBtn" class="action-btn" style="flex: 1; min-width: 180px;">
                 <span class="svg-icon"><svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/></svg></span>
-                უკვე ნასწავლი
+                ნასწავლი სიტყვები
             </button>
             <button id="dynamicStartBtn" class="action-btn" style="flex: 1; min-width: 180px; background: #4a90e2;">
                 <span class="svg-icon"><svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></span>
@@ -483,7 +526,7 @@
                 <span class="svg-icon" style="color: #d97706;">
                     <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M10.59 9.17L5.41 4 4 5.41l5.17 5.17 1.42-1.41zM14.5 4l2.04 2.04L4 18.59 5.41 20 17.96 7.46 20 9.5V4h-5.5zm.33 9.41l-1.41 1.41 3.13 3.13L14.5 20H20v-5.5l-2.04 2.04-3.13-3.13z"/></svg>
                 </span> 
-                <span>შერეული</span>
+                <span>ორივე მიმართულება</span>
             </button>
             
         </div>
@@ -523,7 +566,7 @@
             </button>
         </div>
         
-        <div class="counter-panel" id="counterPanel">ნასწავლი: 0 / 0</div>
+        <div class="counter-panel" id="counterPanel">შესრულებული: 0 / 0</div>
         <div id="gameFeedback" style="text-align:center; margin-top:10px; color:#64748b; font-weight: 500;"></div>
     </div>
 </div>
@@ -637,8 +680,8 @@
             </h3>
             <p style="margin-bottom:24px; color:#475569;">${msg}</p>
             <div style="display:flex; justify-content:center; gap:16px;">
-                <button id="cancelConfirmBtn" class="back-btn">არა</button>
-                <button id="okConfirmBtn" class="action-btn" style="background:#ef4444;">დიახ, წაშალე</button>
+                <button id="cancelConfirmBtn" class="back-btn">გაუქმება</button>
+                <button id="okConfirmBtn" class="action-btn" style="background:#ef4444;">წაშლა</button>
             </div>`;
         overlay.appendChild(div); document.body.appendChild(overlay);
         document.getElementById('cancelConfirmBtn').onclick = () => overlay.remove();
@@ -829,7 +872,7 @@
     
     function showLearnedPopup(){
         let learnedItems = rawDataset.filter((_,idx)=>learnedSet.has(idx));
-        if(!learnedItems.length){ showErrorPopup("ჯერ არაფერი გისწავლია ამ რეჟიმში"); return; }
+        if(!learnedItems.length){ showErrorPopup("ამ მოდულში შესრულებული სიტყვების მონაცემები არ არსებობს"); return; }
         
         let clearBtnHtml = `
             <button id="clearLearnedBtn" class="back-btn" style="padding: 10px 16px; background: #ef4444; color: white;">
@@ -842,7 +885,7 @@
         let clearBtn = document.getElementById('clearLearnedBtn');
         if(clearBtn) {
             clearBtn.onclick = () => {
-                showConfirmPopup("ნამდვილად გსურთ ყველა ნასწავლი სიტყვის წაშლა ამ რეჟიმში?", async () => {
+                showConfirmPopup("ნამდვილად გსურთ ყველა ნასწავლი სიტყვის წაშლა?", async () => {
                     if(currentUser && currentMode) {
                         await db.ref(`users/${currentUser}/learned/${currentMode}`).remove();
                     }
@@ -1009,7 +1052,7 @@
             }, 500);
             currentMode = null;
         } else {
-            loginErrorDiv.innerText = 'მომხმარებელი ან პაროლი არასწორია';
+            loginErrorDiv.innerText = 'მონაცემები არასწორია!';
         }
     };
     
@@ -1077,7 +1120,7 @@
             directionScreen.classList.add('hidden');
             let ok = await startGameWithDirection(dir);
             if(ok) gameScreen.classList.remove('hidden');
-            else { modeScreen.classList.remove('hidden'); showErrorPopup("ვერ ჩაიტვირთა თამაში"); }
+            else { modeScreen.classList.remove('hidden'); showErrorPopup("ვერ ჩაიტვირთა"); }
         };
     });
     
