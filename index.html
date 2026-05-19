@@ -688,14 +688,32 @@
         document.getElementById('okConfirmBtn').onclick = () => { onConfirm(); overlay.remove(); };
     }
     
-    function generateTable(data, columns) {
+function generateTable(data, columns, isLearnedPopup = false) {
         if(!data.length) return '<p>მონაცემები ვერ მოიძებნა</p>';
         let html = `<table class="data-table"><thead><tr>`;
         columns.forEach(col => html += `<th>${col}</th>`);
         html += `</tr></thead><tbody>`;
         for(let row of data){
             html += `<tr>`;
-            columns.forEach(col => html += `<td>${escapeHtml(row[col] || '')}</td>`);
+            columns.forEach(col => {
+                if (col === 'მოქმედება' && isLearnedPopup) {
+                    // ინდივიდუალური წაშლის ღილაკი SVG აიკონით
+                    html += `<td>
+                        <button class="remove-single-btn" data-index="${row._originalIndex}" title="წაშლა" style="background: #ef4444; color: white; border: none; padding: 8px; border-radius: 8px; cursor: pointer; transition: 0.2s; display: inline-flex; align-items: center; justify-content: center;">
+                            <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+                                <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
+                            </svg>
+                        </button>
+                    </td>`;
+                } else {
+                    let cellData = row[col] || '';
+                    if (typeof cellData === 'string' && cellData.includes('<')) {
+                        html += `<td>${cellData}</td>`;
+                    } else {
+                        html += `<td>${escapeHtml(String(cellData))}</td>`;
+                    }
+                }
+            });
             html += `</tr>`;
         }
         html += `</tbody></table>`;
@@ -823,8 +841,7 @@
         return deutschDisplay;
     }
 
-    // ცხრილის გენერატორი, რომელიც რეჟიმის მიხედვით ცვლის სვეტებს
-    function getTableHTML(dataset) {
+function getTableHTML(dataset, isLearnedPopup = false) {
         let columns, tableRows;
         
         if (currentMode === 'wörter') {
@@ -833,7 +850,8 @@
                 'Deutsch': item.de,
                 'Präteritum (3. Person)': item.extra.praet || '',
                 'Perfekt (er/sie)': item.extra.perf || '',
-                'Georgisch': item.ge
+                'Georgisch': item.ge,
+                '_originalIndex': item.originalIndex
             }));
         } 
         else if (currentMode === 'verben') {
@@ -842,7 +860,8 @@
                 'Präfix': item.extra.prefix || '',
                 'Verb': item.extra.baseVerb || '',
                 'Hauptdefinition': item.extra.mainDef || '',
-                'Georgische Übersetzung': item.ge
+                'Georgische Übersetzung': item.ge,
+                '_originalIndex': item.originalIndex
             }));
         } 
         else if (currentMode === 'präpositionen') {
@@ -851,26 +870,33 @@
                 'das Verb': item.ge,
                 'Präposition': item.extra.prep || '',
                 'Kasus': item.extra.kasus || '',
-                'Übersetzung': item.extra.meaning || ''
+                'Übersetzung': item.extra.meaning || '',
+                '_originalIndex': item.originalIndex
             }));
         }
         else {
             columns = ['Deutsch', 'Georgisch'];
             tableRows = dataset.map(item => ({
                 'Deutsch': formatDisplayWord(item),
-                'Georgisch': item.ge
+                'Georgisch': item.ge,
+                '_originalIndex': item.originalIndex
             }));
         }
+
+        // მხოლოდ ნასწავლი სიტყვების ფანჯარაში ვამატებთ მოქმედების სვეტს
+        if (isLearnedPopup) {
+            columns.push('მოქმედება');
+        }
         
-        return generateTable(tableRows, columns);
+        return generateTable(tableRows, columns, isLearnedPopup);
     }
 
-    function showAllWordsPopup(){
+function showAllWordsPopup(){
         if(!rawDataset.length){ showErrorPopup("მონაცემები ვერ მოიძებნა"); return; }
-        showPopup(`${icons.book} ყველა სიტყვა`, getTableHTML(rawDataset));
+        showPopup(`${icons.book} ყველა სიტყვა`, getTableHTML(rawDataset, false));
     }
     
-    function showLearnedPopup(){
+function showLearnedPopup(){
         let learnedItems = rawDataset.filter((_,idx)=>learnedSet.has(idx));
         if(!learnedItems.length){ showErrorPopup("ამ მოდულში შესრულებული სიტყვების მონაცემები არ არსებობს"); return; }
         
@@ -880,8 +906,10 @@
                 გასუფთავება
             </button>`;
             
-        let popupOverlay = showPopup(`${icons.star} ნასწავლი სიტყვები`, getTableHTML(learnedItems), clearBtnHtml);
+        // ვაწვდით true პარამეტრს ღილაკების გამოსაჩენად
+        let popupOverlay = showPopup(`${icons.star} ნასწავლი სიტყვები`, getTableHTML(learnedItems, true), clearBtnHtml);
         
+        // 1. ყველა სიტყვის გასუფთავება
         let clearBtn = document.getElementById('clearLearnedBtn');
         if(clearBtn) {
             clearBtn.onclick = () => {
@@ -895,6 +923,30 @@
                 });
             };
         }
+
+        // 2. ცალკეული სიტყვის წაშლა ინდექსის მიხედვით
+        const removeBtns = popupOverlay.querySelectorAll('.remove-single-btn');
+        removeBtns.forEach(btn => {
+            btn.onclick = async () => {
+                const itemIndex = parseInt(btn.getAttribute('data-index'));
+                
+                showConfirmPopup("ნამდვილად გსურთ ამ სიტყვის ნასწავლიდან ამოშლა?", async () => {
+                    // წაშლა Firebase-დან
+                    if(currentUser && currentMode) {
+                        await db.ref(`users/${currentUser}/learned/${currentMode}/${itemIndex}`).remove();
+                    }
+                    // წაშლა ლოკალური მეხსიერებიდან
+                    learnedSet.delete(itemIndex);
+                    updateLearnedUI();
+                    
+                    // მოდალური ფანჯრის დახურვა და თავიდან გახსნა ახალი მონაცემებით
+                    if(popupOverlay) popupOverlay.remove();
+                    if(learnedSet.size > 0) {
+                        showLearnedPopup();
+                    }
+                });
+            };
+        });
     }
     
     // Game Logic
