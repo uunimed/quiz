@@ -560,12 +560,11 @@
         </div>
     </div>
 
-<div id="cameraContainer" style="position: fixed; top: 10px; left: 10px; z-index: 1000; border: 2px solid #4a90e2; border-radius: 12px; overflow: hidden; width: 120px; transition: all 0.3s;">
-    <video id="video" width="120" height="90" autoplay muted playsinline></video>
-    <div style="display:flex; justify-content: space-between; background: #fff;">
-        <button onclick="toggleCameraSize()" style="padding: 2px 5px; font-size: 0.7rem;">+/-</button>
-        <button onclick="toggleCameraCollapse()" style="padding: 2px 5px; font-size: 0.7rem;">-</button>
-    </div>
+<div id="cameraContainer" style="position: fixed; top: 10px; left: 10px; z-index: 1000; border: 2px solid #4a90e2; border-radius: 12px; overflow: hidden; width: 120px; resize: both; cursor: grab;">
+    <video id="video" width="100%" height="auto" autoplay muted playsinline></video>
+    <!-- ღილაკი ჩაკეცვისთვის -->
+    <div id="collapseBtn" style="cursor: pointer; background: #4a90e2; color: white; text-align: center; font-size: 12px; padding: 2px;">—</div>
+</div>
 </div>
 
     <!-- GAME -->
@@ -680,6 +679,13 @@ function showErrorPopup(msg) {
         overlay.querySelector('.close-err-btn').onclick = () => overlay.remove();
     }
     
+    // მოდელების ერთჯერადი ჩატვირთვა გვერდის გახსნისას
+async function preloadModels() {
+    await faceapi.nets.tinyFaceDetector.loadFromUri('https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/weights');
+    console.log("მოდელები ჩატვირთულია!");
+}
+preloadModels(); // გაეშვება ავტომატურად
+
     function showPopup(titleHtml, contentHtml, extraBtnsHtml = '') {
         const overlay = document.createElement('div'); overlay.className='modal-overlay';
         const modalDiv = document.createElement('div'); modalDiv.className='modal-box';
@@ -1181,40 +1187,61 @@ let faceDetected = true;
 let faceLostTimer = null;
 let isPaused = false;
 
-async function setupCamera() {
+// სახის ამოცნობის ფუნქცია
+async function startFaceDetection() {
     const video = document.getElementById('video');
     
-    if (!video) {
-        console.error("ვიდეო ელემენტი ვერ მოიძებნა!");
-        return;
-    }
+    // ციკლი სახის დასაფიქსირებლად
+    setInterval(async () => {
+        if (!activeGame) return; 
 
-    try {
-        // კამერის ნებართვის მოთხოვნა
-        const stream = await navigator.mediaDevices.getUserMedia({ 
-            video: { facingMode: 'user' }, // წინა კამერის გამოყენება
-            audio: false 
-        });
+        const detections = await faceapi.detectAllFaces(video, new faceapi.TinyFaceDetectorOptions());
         
+        if (detections.length > 0) {
+            faceDetected = true;
+            clearTimeout(faceLostTimer);
+            if(isPaused) resumeGame();
+        } else if (faceDetected) {
+            faceDetected = false;
+            // 3 წამი თუ ვერ დაინახა, აპაუზებს
+            faceLostTimer = setTimeout(() => {
+                if(!isPaused) pauseGame();
+            }, 3000);
+        }
+    }, 1000);
+}
+
+// ჩაკეცვის ფუნქცია
+document.getElementById('collapseBtn').onclick = () => {
+    const container = document.getElementById('cameraContainer');
+    const video = document.getElementById('video');
+    // ვამოწმებთ ვიდეოს ჩვენებას
+    if (video.style.display !== 'none') {
+        video.style.display = 'none';
+        container.style.width = '30px';
+        container.style.height = '30px'; // დავუმატოთ სიმაღლე, რომ კვადრატი იყოს
+    } else {
+        video.style.display = 'block';
+        container.style.width = '120px';
+        container.style.height = 'auto';
+    }
+};
+
+// განახლებული setupCamera
+async function setupCamera() {
+    const video = document.getElementById('video');
+    try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
         video.srcObject = stream;
         
-        // მოდელების ჩატვირთვა
-        // დარწმუნდით, რომ ეს URL ხელმისაწვდომია
-        await faceapi.nets.tinyFaceDetector.loadFromUri('https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/weights');
-        
-        // დაველოდოთ ვიდეოს მზადყოფნას
-        return new Promise((resolve, reject) => {
-            video.onloadedmetadata = () => {
-                video.play()
-                    .then(() => resolve(video))
-                    .catch(err => reject(err));
-            };
-            video.onerror = (err) => reject(err);
-        });
-        
+
+        video.onloadedmetadata = () => {
+            video.play();
+            startFaceDetection(); 
+        };
     } catch (err) {
-        console.error("კამერის გაშვების შეცდომა:", err);
-        alert("კამერა ვერ ჩაირთო. გთხოვთ, შეამოწმოთ ნებართვები და გამოიყენოთ HTTPS.");
+        console.error("Camera Error:", err);
+        alert("კამერა ვერ ჩაირთო. გთხოვთ, შეამოწმოთ ნებართვები.");
     }
 }
 
