@@ -234,12 +234,17 @@
             margin: 20px 0 10px 0;
             overflow: hidden;
         }
-        .timer-fill {
-            width: 100%;
-            height: 100%;
-            background: #10b981;
-            transition: width 0.1s linear, background-color 0.3s ease;
-        }
+.timer-fill {
+    width: 100%;
+    height: 100%;
+    /* ფერის ცვლილების ანიმაცია */
+    transition: background-color 0.3s ease, width 0.1s linear;
+    background-color: #10b981; /* იწყებს მწვანეთი */
+}
+
+.timer-fill.danger {
+    background-color: #ef4444; /* წითელი ფერი */
+}
         
         .counter-panel {
             background: #334155;
@@ -427,6 +432,17 @@
 
             .data-table th, .data-table td { padding: 10px 12px; font-size: 0.85rem; }
         }
+        
+        .count-badge {
+    background: #334155;
+    color: #ffffff;
+    padding: 4px 12px;
+    border-radius: 8px;
+    font-size: 0.9rem;
+    font-weight: bold;
+    margin-left: 10px;
+}
+
     </style>
 </head>
 <body>
@@ -586,11 +602,13 @@
     firebase.initializeApp(firebaseConfig);
     const db = firebase.database();
     
-    // Global state
+// Global state
     let currentUser = null;
     let currentMode = null;
     let rawDataset = [];
     let learnedSet = new Set();
+    let learnedData = {}; // <-- ახალი: Firebase-დან წამოღებული ცდების ოდენობები
+    let attemptsTracker = {}; // <-- ახალი: თამაშის დროს ცდების დამთვლელი
     
     // Game state
     let activeGame = false;
@@ -637,14 +655,13 @@
         star: `<svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/></svg>`
     };
 
-    // Utilities
-    function showErrorPopup(msg) {
+function showErrorPopup(msg) {
         const overlay = document.createElement('div'); overlay.className='modal-overlay';
         const div = document.createElement('div'); 
         div.style.background='#ffffff'; div.style.padding='32px'; div.style.borderRadius='20px'; div.style.maxWidth='400px'; div.style.textAlign='center';
-        div.innerHTML = `<h3 style="margin-bottom:16px; display:flex; align-items:center; justify-content:center; gap:8px;">${icons.warning} შეტყობინება</h3><p style="margin-bottom:24px; color:#475569;">${msg}</p><button id="okErrBtn" class="back-btn">OK</button>`;
+        div.innerHTML = `<h3 style="margin-bottom:16px; display:flex; align-items:center; justify-content:center; gap:8px;">${icons.warning} შეტყობინება</h3><p style="margin-bottom:24px; color:#475569;">${msg}</p><button class="back-btn close-err-btn">OK</button>`;
         overlay.appendChild(div); document.body.appendChild(overlay);
-        document.getElementById('okErrBtn').onclick = () => overlay.remove();
+        overlay.querySelector('.close-err-btn').onclick = () => overlay.remove();
     }
     
     function showPopup(titleHtml, contentHtml, extraBtnsHtml = '') {
@@ -691,19 +708,46 @@
 function generateTable(data, columns, isLearnedPopup = false) {
         if(!data.length) return '<p>მონაცემები ვერ მოიძებნა</p>';
         let html = `<table class="data-table"><thead><tr>`;
-        columns.forEach(col => html += `<th>${col}</th>`);
+        
+        // სათაურების დახატვა
+        columns.forEach(col => {
+            if (col === 'N') {
+                html += `<th style="width: 40px; text-align: center;">${col}</th>`;
+            } else {
+                html += `<th>${col}</th>`;
+            }
+        });
+        
         html += `</tr></thead><tbody>`;
         for(let row of data){
             html += `<tr>`;
             columns.forEach(col => {
-                if (col === 'მოქმედება' && isLearnedPopup) {
+                // ნუმერაციის ველის დახატვა
+                if (col === 'N') {
+                    html += `<td style="text-align: center; font-weight: bold; color: #64748b;">${row[col]}</td>`;
+                } 
+                else if (col === 'მოქმედება' && isLearnedPopup) {
                     // ინდივიდუალური წაშლის ღილაკი SVG აიკონით
-                    html += `<td>
+                    html += `<td style="text-align: center;">
                         <button class="remove-single-btn" data-index="${row._originalIndex}" title="წაშლა" style="background: #ef4444; color: white; border: none; padding: 8px; border-radius: 8px; cursor: pointer; transition: 0.2s; display: inline-flex; align-items: center; justify-content: center;">
                             <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
                                 <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
                             </svg>
                         </button>
+                    </td>`;
+                } else if (col === 'ცდა' && isLearnedPopup) {
+                    let attempts = learnedData[row._originalIndex];
+                    if (typeof attempts !== 'number') attempts = 1;
+
+                    let bgCol = '#10b981'; // 1: მწვანე
+                    if (attempts === 2 || attempts === 3) bgCol = '#f97316'; // 2-3: სტაფილოსფერი
+                    else if (attempts >= 4 && attempts <= 6) bgCol = '#334155'; // 4-6: მუქი ნაცრისფერი/ლურჯი
+                    else if (attempts >= 7) bgCol = '#7f1d1d'; // 7+: მუქი წითელი
+
+                    html += `<td style="text-align: center;">
+                        <div style="background: ${bgCol}; color: white; padding: 4px 0; width: 32px; border-radius: 8px; text-align: center; font-weight: bold; font-size: 0.9rem; margin: auto;">
+                            ${attempts}
+                        </div>
                     </td>`;
                 } else {
                     let cellData = row[col] || '';
@@ -791,18 +835,22 @@ function generateTable(data, columns, isLearnedPopup = false) {
         } catch(e){ showErrorPopup("ჩატვირთვის შეცდომა: "+e.message); return [];}
     }
     
-    // Firebase Data Loading
+// Firebase Data Loading
     async function loadLearnedFromFirebase(){
         if(!currentUser || !currentMode) return;
         const snapshot = await db.ref(`users/${currentUser}/learned/${currentMode}`).once('value');
         const data = snapshot.val() || {};
-        learnedSet = new Set(Object.keys(data).filter(k=>data[k]===true).map(Number));
+        learnedData = data; // ვინახავთ ობიექტს
+        // რადგან ადრე მნიშვნელობად true ინახებოდა, ახლა კი რიცხვი, ამოვიღოთ ყველა key
+        learnedSet = new Set(Object.keys(data).map(Number)); 
         updateLearnedUI();
     }
     
-    async function saveLearnedIndex(index){
+    async function saveLearnedIndex(index, attempts){
         if(!currentUser || !currentMode) return;
-        await db.ref(`users/${currentUser}/learned/${currentMode}/${index}`).set(true);
+        // Firebase-ში true-ს ნაცვლად ვინახავთ ცდების ოდენობას
+        await db.ref(`users/${currentUser}/learned/${currentMode}/${index}`).set(attempts);
+        learnedData[index] = attempts;
         learnedSet.add(index);
         updateLearnedUI();
     }
@@ -845,8 +893,9 @@ function getTableHTML(dataset, isLearnedPopup = false) {
         let columns, tableRows;
         
         if (currentMode === 'wörter') {
-            columns = ['Deutsch', 'Präteritum (3. Person)', 'Perfekt (er/sie)', 'Georgisch'];
-            tableRows = dataset.map(item => ({
+            columns = ['N', 'Deutsch', 'Präteritum (3. Person)', 'Perfekt (er/sie)', 'Georgisch'];
+            tableRows = dataset.map((item, index) => ({
+                'N': index + 1,
                 'Deutsch': item.de,
                 'Präteritum (3. Person)': item.extra.praet || '',
                 'Perfekt (er/sie)': item.extra.perf || '',
@@ -855,8 +904,9 @@ function getTableHTML(dataset, isLearnedPopup = false) {
             }));
         } 
         else if (currentMode === 'verben') {
-            columns = ['Präfix', 'Verb', 'Hauptdefinition', 'Georgische Übersetzung'];
-            tableRows = dataset.map(item => ({
+            columns = ['N', 'Präfix', 'Verb', 'Hauptdefinition', 'Georgische Übersetzung'];
+            tableRows = dataset.map((item, index) => ({
+                'N': index + 1,
                 'Präfix': item.extra.prefix || '',
                 'Verb': item.extra.baseVerb || '',
                 'Hauptdefinition': item.extra.mainDef || '',
@@ -865,8 +915,9 @@ function getTableHTML(dataset, isLearnedPopup = false) {
             }));
         } 
         else if (currentMode === 'präpositionen') {
-            columns = ['das Verb', 'Präposition', 'Kasus', 'Übersetzung'];
-            tableRows = dataset.map(item => ({
+            columns = ['N', 'das Verb', 'Präposition', 'Kasus', 'Übersetzung'];
+            tableRows = dataset.map((item, index) => ({
+                'N': index + 1,
                 'das Verb': item.ge,
                 'Präposition': item.extra.prep || '',
                 'Kasus': item.extra.kasus || '',
@@ -875,8 +926,9 @@ function getTableHTML(dataset, isLearnedPopup = false) {
             }));
         }
         else {
-            columns = ['Deutsch', 'Georgisch'];
-            tableRows = dataset.map(item => ({
+            columns = ['N', 'Deutsch', 'Georgisch'];
+            tableRows = dataset.map((item, index) => ({
+                'N': index + 1,
                 'Deutsch': formatDisplayWord(item),
                 'Georgisch': item.ge,
                 '_originalIndex': item.originalIndex
@@ -885,6 +937,7 @@ function getTableHTML(dataset, isLearnedPopup = false) {
 
         // მხოლოდ ნასწავლი სიტყვების ფანჯარაში ვამატებთ მოქმედების სვეტს
         if (isLearnedPopup) {
+            columns.push('ცდა'); 
             columns.push('მოქმედება');
         }
         
@@ -892,88 +945,164 @@ function getTableHTML(dataset, isLearnedPopup = false) {
     }
 
 function showAllWordsPopup(){
-        if(!rawDataset.length){ showErrorPopup("მონაცემები ვერ მოიძებნა"); return; }
-        showPopup(`${icons.book} ყველა სიტყვა`, getTableHTML(rawDataset, false));
-    }
+    if(!rawDataset.length){ showErrorPopup("მონაცემები ვერ მოიძებნა"); return; }
+    
+    // დამატებითი ღილაკი დარჩენილი სიტყვებისთვის
+    let extraBtns = `
+        <button id="remWordsBtn" class="action-btn" style="padding: 10px 16px; background: #d97706;">
+            <span class="svg-icon"><svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z"/><path d="M11 7h2v6l-5.24 3.14-.95-1.58L11 12.33V7z"/></svg></span> 
+            დარჩენილი
+        </button>`;
+
+    let title = `${icons.book} ყველა სიტყვა <span class="count-badge">${rawDataset.length}</span>`;
+    let popup = showPopup(title, getTableHTML(rawDataset, false), extraBtns);
+    
+    // ღილაკის ფუნქციონალი
+    document.getElementById('remWordsBtn').onclick = () => {
+        popup.remove(); // დავხუროთ წინა ფანჯარა
+        showRemainingWordsPopup(); // გავხსნათ ახალი
+    };
+}
     
 function showLearnedPopup(){
-        let learnedItems = rawDataset.filter((_,idx)=>learnedSet.has(idx));
-        if(!learnedItems.length){ showErrorPopup("ამ მოდულში შესრულებული სიტყვების მონაცემები არ არსებობს"); return; }
+    let learnedItems = rawDataset.filter((_,idx)=>learnedSet.has(idx));
+    if(!learnedItems.length){ showErrorPopup("ამ მოდულში შესრულებული სიტყვების მონაცემები არ არსებობს"); return; }
+    
+    let clearBtnHtml = `
+        <button id="clearLearnedBtn" class="back-btn" style="padding: 10px 16px; background: #ef4444; color: white;">
+            <span class="svg-icon"><svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg></span> 
+            გასუფთავება
+        </button>`;
         
-        let clearBtnHtml = `
-            <button id="clearLearnedBtn" class="back-btn" style="padding: 10px 16px; background: #ef4444; color: white;">
-                <span class="svg-icon"><svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg></span> 
-                გასუფთავება
-            </button>`;
-            
-        // ვაწვდით true პარამეტრს ღილაკების გამოსაჩენად
-        let popupOverlay = showPopup(`${icons.star} ნასწავლი სიტყვები`, getTableHTML(learnedItems, true), clearBtnHtml);
-        
-        // 1. ყველა სიტყვის გასუფთავება
-        let clearBtn = document.getElementById('clearLearnedBtn');
-        if(clearBtn) {
-            clearBtn.onclick = () => {
-                showConfirmPopup("ნამდვილად გსურთ ყველა ნასწავლი სიტყვის წაშლა?", async () => {
-                    if(currentUser && currentMode) {
-                        await db.ref(`users/${currentUser}/learned/${currentMode}`).remove();
-                    }
-                    learnedSet.clear();
-                    updateLearnedUI();
-                    if(popupOverlay) popupOverlay.remove();
-                });
-            };
-        }
+    // სათაური + ნასწავლი სიტყვების ჯამური რაოდენობა
+    let title = `${icons.star} ნასწავლი სიტყვები <span class="count-badge">${learnedItems.length}</span>`;
+    
+    let popupOverlay = showPopup(title, getTableHTML(learnedItems, true), clearBtnHtml);
+    
+    // 1. ყველა სიტყვის გასუფთავება
+    let clearBtn = document.getElementById('clearLearnedBtn');
+    if(clearBtn) {
+        clearBtn.onclick = () => {
+            showConfirmPopup("ნამდვილად გსურთ ყველა ნასწავლი სიტყვის წაშლა?", async () => {
+                if(currentUser && currentMode) {
+                    await db.ref(`users/${currentUser}/learned/${currentMode}`).remove();
+                }
+                learnedSet.clear();
+                learnedData = {}; 
+                updateLearnedUI();
+                if(popupOverlay) popupOverlay.remove();
+            });
+        };
+    }
 
-        // 2. ცალკეული სიტყვის წაშლა ინდექსის მიხედვით
-        const removeBtns = popupOverlay.querySelectorAll('.remove-single-btn');
-        removeBtns.forEach(btn => {
-            btn.onclick = async () => {
-                const itemIndex = parseInt(btn.getAttribute('data-index'));
+    // 2. ცალკეული სიტყვის წაშლა ინდექსის მიხედვით
+    const removeBtns = popupOverlay.querySelectorAll('.remove-single-btn');
+    removeBtns.forEach(btn => {
+        btn.onclick = async () => {
+            const itemIndex = parseInt(btn.getAttribute('data-index'));
+            
+            showConfirmPopup("ნამდვილად გსურთ ამ სიტყვის ნასწავლიდან ამოშლა?", async () => {
+                if(currentUser && currentMode) {
+                    await db.ref(`users/${currentUser}/learned/${currentMode}/${itemIndex}`).remove();
+                }
+                learnedSet.delete(itemIndex);
+                delete learnedData[itemIndex]; 
+                updateLearnedUI();
                 
-                showConfirmPopup("ნამდვილად გსურთ ამ სიტყვის ნასწავლიდან ამოშლა?", async () => {
-                    // წაშლა Firebase-დან
-                    if(currentUser && currentMode) {
-                        await db.ref(`users/${currentUser}/learned/${currentMode}/${itemIndex}`).remove();
-                    }
-                    // წაშლა ლოკალური მეხსიერებიდან
-                    learnedSet.delete(itemIndex);
-                    updateLearnedUI();
-                    
-                    // მოდალური ფანჯრის დახურვა და თავიდან გახსნა ახალი მონაცემებით
-                    if(popupOverlay) popupOverlay.remove();
-                    if(learnedSet.size > 0) {
-                        showLearnedPopup();
-                    }
-                });
-            };
-        });
+                if(popupOverlay) popupOverlay.remove();
+                if(learnedSet.size > 0) {
+                    showLearnedPopup();
+                }
+            });
+        };
+    });
+}
+    
+function showRemainingWordsPopup() {
+    // ამოვიღოთ მხოლოდ ის სიტყვები, რომლებიც არ არის ნასწავლი
+    let remainingItems = rawDataset.filter((_, idx) => !learnedSet.has(idx));
+    
+    if (remainingItems.length === 0) {
+        showErrorPopup("ყველა სიტყვა უკვე ნასწავლი გაქვთ!");
+        return;
     }
     
-    // Game Logic
-    async function startGameWithDirection(direction){
+    // უკან დაბრუნების ღილაკი
+    let backBtnHtml = `
+        <button id="backToAllBtn" class="back-btn" style="padding: 10px 16px; background: #64748b; color: white;">
+            <span class="svg-icon">
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+                    <path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/>
+                </svg>
+            </span> 
+            უკან
+        </button>`;
+    
+    let title = `${icons.book} უკვე ნასწავლი <span class="count-badge">${remainingItems.length}</span>`;
+    let popup = showPopup(title, getTableHTML(remainingItems, false), backBtnHtml);
+    
+    // ღილაკის ფუნქციონალი
+    document.getElementById('backToAllBtn').onclick = () => {
+        popup.remove(); // დავხუროთ დარჩენილი სიტყვების ფანჯარა
+        showAllWordsPopup(); // დავბრუნდეთ "ყველა სიტყვა"-ს ფანჯარაში
+    };
+}
+
+async function startGameWithDirection(direction){
         if(!rawDataset.length){ showErrorPopup("მონაცემები არ არის"); return false; }
         gameDirection = direction;
-        gameItems = [...rawDataset].map((item,idx)=>({ ...item, originalIndex: idx }));
-        for(let i=gameItems.length-1;i>0;i--){ let j=Math.floor(Math.random()*(i+1)); [gameItems[i],gameItems[j]]=[gameItems[j],gameItems[i]]; }
+        
+        // ფილტრაცია: ამოვიღოთ სიტყვები, რომლებიც უკვე ნასწავლი გვაქვს (learnedSet-შია)
+        gameItems = [...rawDataset]
+            .map((item,idx) => ({ ...item, originalIndex: idx }))
+            .filter(item => !learnedSet.has(item.originalIndex));
+            
+        // თუ აღმოჩნდა, რომ ყველა სიტყვა ნასწავლია
+        if(gameItems.length === 0){
+            showErrorPopup("ყველა სიტყვა ნასწავლია, რის გამოც თამაში ვერ გაგრძელდება.");
+            return false;
+        }
+
+        // ამოურევთ მხოლოდ დარჩენილ (სწავლების პროცესში მყოფ) სიტყვებს
+        for(let i=gameItems.length-1;i>0;i--){ 
+            let j=Math.floor(Math.random()*(i+1)); 
+            [gameItems[i],gameItems[j]]=[gameItems[j],gameItems[i]]; 
+        }
+        
         currentGameIndex = 0;
         activeGame = true;
+        attemptsTracker = {};
         correctAnswered = false;
         if(timerInterval) clearInterval(timerInterval);
         renderNextCard();
         return true;
     }
     
+    // განახლებული ბარათის გამოტანის ფუნქცია (ანახლებს მთვლელს თამაშის დროს)
     function renderNextCard(){
         if(!activeGame) return;
         if(currentGameIndex >= gameItems.length){
-            activeGame=false; gameFeedbackSpan.innerText="გილოცავთ! თამაში დასრულდა!";
+            activeGame=false; 
+            gameFeedbackSpan.innerText="გილოცავთ! თამაში დასრულდა!";
+            counterPanelSpan.innerText = "დარჩენილია: 0";
             if(timerInterval) clearInterval(timerInterval);
             return;
         }
+        
         const item = gameItems[currentGameIndex];
         
+        // განვაახლოთ თამაშის დინამიური მთვლელი (გვიჩვენებს რამდენი სიტყვა დარჩა ამ სესიაში)
+        counterPanelSpan.innerText = `დარჩენილია: ${gameItems.length - currentGameIndex}`;
+        
+        // --- მრიცხველის ზრდა ---
+        if(!attemptsTracker[item.originalIndex]) {
+            attemptsTracker[item.originalIndex] = 0;
+        }
+        attemptsTracker[item.originalIndex]++;
+        // ------------------------        
+        
         let deHTML = formatDisplayWord(item); 
-        let geHTML = item.ge;                 
+        let geHTML = item.ge;                  
         
         let questionHTML = ''; 
         let answerHTML = '';
@@ -1029,10 +1158,15 @@ function showLearnedPopup(){
         if(timeLeft <= 0 && !correctAnswered) autoTimeout();
     }
     
-    function autoTimeout(){
+function autoTimeout(){
         if(correctAnswered) return;
         correctAnswered = true;
         clearInterval(timerInterval);
+        
+        // დროის ამოწურვაც შეცდომაა, ამიტომ სიტყვას ვამატებთ რიგის ბოლოში
+        if(currentGameIndex < gameItems.length){
+            gameItems.push(gameItems[currentGameIndex]);
+        }
         moveToNextCard();
     }
     
@@ -1041,11 +1175,12 @@ function showLearnedPopup(){
         correctAnswered = true;
         clearInterval(timerInterval);
         const idx = currentQuestionObj.index;
-        if(!learnedSet.has(idx)){
-            saveLearnedIndex(idx);
-            learnedSet.add(idx);
-            updateLearnedUI();
-        }
+        
+        // ამოვიღეთ if(!learnedSet.has(idx)) შეზღუდვა. 
+        // ახლა, ყოველთვის შეინახავს ცდების ზუსტ რაოდენობას.
+        let attempts = attemptsTracker[idx] || 1;
+        saveLearnedIndex(idx, attempts); 
+        
         moveToNextCard();
     }
     
@@ -1053,10 +1188,10 @@ function showLearnedPopup(){
         if(!activeGame || correctAnswered) return;
         correctAnswered = true;
         clearInterval(timerInterval);
+        
+        // ვამატებთ სიტყვას მასივის ბოლოში (აქ ამოვიღეთ splice!)
         if(currentGameIndex < gameItems.length){
-            let currentItem = gameItems[currentGameIndex];
-            gameItems.splice(currentGameIndex, 1);
-            gameItems.push(currentItem);
+            gameItems.push(gameItems[currentGameIndex]);
         }
         moveToNextCard();
     }
@@ -1068,17 +1203,16 @@ function showLearnedPopup(){
         renderNextCard();
     }
     
-    function updateTimerUI(){
-        let percent = (timeLeft/10)*100;
-        timerFillDiv.style.width = `${Math.max(0,percent)}%`;
-        timerTextSpan.innerText = `${timeLeft.toFixed(1)} წმ`;
-        
-        if(timeLeft <= 3.0) {
-            timerFillDiv.style.backgroundColor = "#ef4444";
-        } else {
-            timerFillDiv.style.backgroundColor = "#10b981";
-        }
-    }
+function updateTimerUI(){
+    let percent = (timeLeft / 10) * 100;
+    timerFillDiv.style.width = `${Math.max(0, percent)}%`;
+    timerTextSpan.innerText = `${timeLeft.toFixed(1)} წმ`;
+    
+    // ფერის გამოთვლა: 
+    // 10 წამზე hue = 120 (მწვანე), 0 წამზე hue = 0 (წითელი)
+    let hue = (timeLeft / 10) * 120;
+    timerFillDiv.style.backgroundColor = `hsl(${hue}, 70%, 50%)`;
+}
     
     // UI Events
     loginBtn.onclick = async () => {
@@ -1165,14 +1299,17 @@ function showLearnedPopup(){
     
     cancelDirectionBtn.onclick = ()=>{ directionScreen.classList.add('hidden'); modeScreen.classList.remove('hidden'); };
     
-    const dirBtns = document.querySelectorAll('.direction-btn');
+const dirBtns = document.querySelectorAll('.direction-btn');
     dirBtns.forEach(btn=>{
         btn.onclick = async ()=>{
             let dir = btn.getAttribute('data-dir');
             directionScreen.classList.add('hidden');
             let ok = await startGameWithDirection(dir);
-            if(ok) gameScreen.classList.remove('hidden');
-            else { modeScreen.classList.remove('hidden'); showErrorPopup("ვერ ჩაიტვირთა"); }
+            if(ok) {
+                gameScreen.classList.remove('hidden');
+            } else { 
+                modeScreen.classList.remove('hidden'); 
+            }
         };
     });
     
