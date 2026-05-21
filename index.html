@@ -1577,13 +1577,13 @@ if (ok) {
 
         // სახის დეტექციის ფუნქცია - გლობალური ცვლადების გამოყენებით
         window.faceDetectionActive = true;
-        window.isGamePausedByFace = false;
+        gamePausedByFace = false;
         window.pauseCountdownInterval = null;
         window.resumeCountdownInterval = null;
         window.faceLostTimer = null;
 
         const startPauseCountdown = () => {
-            if (window.isGamePausedByFace) return;
+            if (gamePausedByFace) return;
             
             // გავასუფთავოთ არსებული ტაიმერი
             if (window.pauseCountdownInterval) {
@@ -1612,8 +1612,8 @@ if (ok) {
                     window.pauseCountdownInterval = null;
                     popupOverlay.remove();
                     
-                    if(!window.isGamePausedByFace && activeGame){
-                        window.isGamePausedByFace = true;
+                    if(!gamePausedByFace && activeGame){
+                        gamePausedByFace = true;
                         if(timerInterval) { 
                             clearInterval(timerInterval); 
                             timerInterval = null; 
@@ -1627,7 +1627,7 @@ if (ok) {
         };
 
         const startResumeCountdown = () => {
-            if (!window.isGamePausedByFace) return;
+            if (!gamePausedByFace) return;
             
             if(window.resumeCountdownInterval) {
                 clearInterval(window.resumeCountdownInterval);
@@ -1659,8 +1659,8 @@ if (ok) {
                     window.resumeCountdownInterval = null;
                     popupOverlay.remove();
                     
-                    if(window.isGamePausedByFace){
-                        window.isGamePausedByFace = false;
+                    if(gamePausedByFace){
+                        gamePausedByFace = false;
                         questionWordSpan.style.opacity = '1';
                         targetRevealSpan.style.opacity = '1';
                         
@@ -1690,7 +1690,7 @@ const detect = async () => {
         
         if (detection) {
             // სახე დაფიქსირდა
-            if (window.isGamePausedByFace) {
+            if (gamePausedByFace) {
                 startResumeCountdown();
             }
             if (window.faceLostTimer) { 
@@ -1699,9 +1699,9 @@ const detect = async () => {
             }
         } else {
             // სახე არ ჩანს - მხოლოდ მაშინ ვიწყებთ ტაიმერს, თუ თამაში არ არის პაუზაში
-            if (!window.isGamePausedByFace && !window.faceLostTimer && activeGame) {
+            if (!gamePausedByFace && !window.faceLostTimer && activeGame) {
                 window.faceLostTimer = setTimeout(() => { 
-                    if (!window.isGamePausedByFace && activeGame) {
+                    if (!gamePausedByFace && activeGame) {
                         startPauseCountdown(); 
                     }
                     window.faceLostTimer = null; 
@@ -1753,7 +1753,7 @@ exitGameBtn.onclick = () => {
     if(resumeOverlay) resumeOverlay.remove();
     
     window.faceDetectionActive = false;
-    window.isGamePausedByFace = false;
+    gamePausedByFace = false;
     activeGame = false;
     
     gameScreen.classList.add('hidden');
