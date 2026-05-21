@@ -697,12 +697,27 @@ function showErrorPopup(msg) {
     
 let modelsLoaded = false; // დაამატე ეს ცვლადი თავში, Global state-თან
 
+let faceApiStatus = {
+    modelsLoaded: false,
+    active: false,
+    isPaused: false,
+    timer: null
+};
+
+// შეცვალეთ ეს ნაწილი
 async function preloadModels() {
-    await faceapi.nets.tinyFaceDetector.loadFromUri('https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/weights');
-    modelsLoaded = true; // მონიშნე რომ ჩაიტვირთა
-    console.log("მოდელები ჩატვირთულია!");
+    try {
+        // მითითება: face-api.js-ს სჭირდება მოდელების საქაღალდე. 
+        // თუ ვებ-სერვერზე გაქვთ, ჩაწერეთ './models'
+        await faceapi.nets.tinyFaceDetector.loadFromUri('https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/weights');
+        
+        // მნიშვნელოვანი: ეს უნდა იყოს გლობალური ცვლადი, რასაც detect ფუნქცია დაინახავს
+        window.modelsLoaded = true; 
+        console.log("მოდელები ჩატვირთულია");
+    } catch (e) {
+        console.error("მოდელების ჩატვირთვის შეცდომა:", e);
+    }
 }
-preloadModels(); // გაეშვება ავტომატურად
 
     function showPopup(titleHtml, contentHtml, extraBtnsHtml = '') {
         const overlay = document.createElement('div'); overlay.className='modal-overlay';
@@ -899,12 +914,49 @@ function generateTable(data, columns, isLearnedPopup = false) {
         counterPanelSpan.innerText = `ნასწავლი: ${learnedSet.size} / ${rawDataset.length}`;
     }
     
-    async function initFaceDetection() {
-    if (!modelsLoaded) { setTimeout(initFaceDetection, 500); return; }
+    async function startDetectionLoop(video) {
+    if (!faceApiStatus.active) return;
+
+    const detection = await faceapi.detectSingleFace(video, new faceapi.TinyFaceDetectorOptions());
+
+    if (detection) {
+        // სახე არის
+        if (faceApiStatus.isPaused) {
+            // აქ დაამატეთ ლოგიკა "სახე დაფიქსირდა -> თამაშის აღდგენა"
+            console.log("სახე დაფიქსირდა, ვაგრძელებთ...");
+            faceApiStatus.isPaused = false;
+            // აქ გააგრძელეთ თამაში (resume)
+        }
+    } else {
+        // სახე არ არის
+        if (!faceApiStatus.isPaused && activeGame) {
+            console.log("სახე არ ჩანს, ვაპაუზებთ...");
+            faceApiStatus.isPaused = true;
+            // აქ დაპაუზეთ თამაში (pause)
+        }
+    }
+
+    if (faceApiStatus.active) {
+        requestAnimationFrame(() => startDetectionLoop(video));
+    }
+}
+
+async function initFaceDetection() {
+    if (!modelsLoaded) { 
+        console.log("მოდელები ჯერ არ ჩატვირთულა, ველოდებით...");
+        setTimeout(initFaceDetection, 500); 
+        return; 
+    }
+    
+    console.log("სახის დეტექცია იწყება...");
     faceActive = true;
+    gamePausedByFace = false;
     
     const videoEl = document.getElementById('video');
-    if (!videoEl) return;
+    if (!videoEl) {
+        console.error("ვიდეო ელემენტი ვერ მოიძებნა");
+        return;
+    }
     
     const detectLoop = async () => {
         if (!faceActive || !activeGame) {
@@ -917,6 +969,7 @@ function generateTable(data, columns, isLearnedPopup = false) {
             
             if (detection) {
                 // სახე დაფიქსირდა
+                console.log("სახე დაფიქსირდა, gamePausedByFace=", gamePausedByFace);
                 if (gamePausedByFace) {
                     startResumeCountdownFunc();
                 }
@@ -926,8 +979,11 @@ function generateTable(data, columns, isLearnedPopup = false) {
                 }
             } else {
                 // სახე არ არის
+                console.log("სახე არ არის, gamePausedByFace=", gamePausedByFace);
                 if (!gamePausedByFace && !faceLostTimerGlobal && activeGame) {
+                    console.log("3 წამში პაუზის კუნტდაუნი დაიწყება");
                     faceLostTimerGlobal = setTimeout(() => {
+                        console.log("3 წამი გავიდა, ვიწყებთ პაუზის კუნტდაუნს");
                         if (!gamePausedByFace && activeGame) {
                             startPauseCountdownFunc();
                         }
@@ -935,7 +991,9 @@ function generateTable(data, columns, isLearnedPopup = false) {
                     }, 3000);
                 }
             }
-        } catch(e) { console.error("Face detect error:", e); }
+        } catch(e) { 
+            console.error("Face detect error:", e); 
+        }
         
         requestAnimationFrame(detectLoop);
     };
@@ -1267,8 +1325,8 @@ currentGameIndex = 0;
     
     // განახლებული ბარათის გამოტანის ფუნქცია (ანახლებს მთვლელს თამაშის დროს)
     function renderNextCard(){
-    if(!activeGame || window.isGamePausedByFace) return;
-        if(currentGameIndex >= gameItems.length){
+ if(!activeGame || gamePausedByFace) return;
+ if(currentGameIndex >= gameItems.length){
             activeGame=false; 
             gameFeedbackSpan.innerText="გილოცავთ! თამაში დასრულდა!";
             counterPanelSpan.innerText = "დარჩენილია: 0";
@@ -1326,8 +1384,8 @@ currentGameIndex = 0;
     }
     
     function updateTimer(){
-    if(!activeGame || correctAnswered || window.isGamePausedByFace) return;
-        if(timeLeft <= 0){
+if(!activeGame || correctAnswered || gamePausedByFace) return; 
+if(timeLeft <= 0){
             clearInterval(timerInterval);
             if(!correctAnswered) autoTimeout();
             return;
@@ -1358,8 +1416,8 @@ currentGameIndex = 0;
     }
     
     function handleKnow(){
-        if(!activeGame || correctAnswered) return;
-        correctAnswered = true;
+if(!activeGame || correctAnswered || gamePausedByFace) return;
+correctAnswered = true;
         clearInterval(timerInterval);
         const idx = currentQuestionObj.index;
         
@@ -1372,8 +1430,8 @@ currentGameIndex = 0;
     }
     
     function handleDontKnow(){
-        if(!activeGame || correctAnswered) return;
-        correctAnswered = true;
+if(!activeGame || correctAnswered || gamePausedByFace) return;
+correctAnswered = true;
         clearInterval(timerInterval);
         
         // ვამატებთ სიტყვას მასივის ბოლოში (აქ ამოვიღეთ splice!)
@@ -1384,8 +1442,8 @@ currentGameIndex = 0;
     }
     
     function moveToNextCard(){
-    if(!activeGame || window.isGamePausedByFace) return;
-        if(currentGameIndex >= gameItems.length) { activeGame=false; return; }
+ if(!activeGame || gamePausedByFace) return;
+ if(currentGameIndex >= gameItems.length) { activeGame=false; return; }
         currentGameIndex++;
         renderNextCard();
     }
@@ -1623,45 +1681,40 @@ if (ok) {
             }, 1000);
         };
 
-        const detect = async () => {
-            if (!window.faceDetectionActive || !activeGame || !video || video.paused) {
-                if(window.faceDetectionActive) requestAnimationFrame(detect);
-                return;
+const detect = async () => {
+    if (!window.faceDetectionActive || !activeGame || !video || video.paused || !window.modelsLoaded) {
+        if(window.faceDetectionActive) requestAnimationFrame(detect);
+        return;
+    }
+    
+    try {
+        const detection = await faceapi.detectSingleFace(video, new faceapi.TinyFaceDetectorOptions());
+        
+        if (detection) {
+            // სახე დაფიქსირდა
+            if (window.isGamePausedByFace) {
+                startResumeCountdown();
             }
-            
-            if (!modelsLoaded) {
-                requestAnimationFrame(detect);
-                return;
+            if (window.faceLostTimer) { 
+                clearTimeout(window.faceLostTimer); 
+                window.faceLostTimer = null; 
             }
-            
-            try {
-                const detection = await faceapi.detectSingleFace(video, new faceapi.TinyFaceDetectorOptions());
-                
-                if (detection) {
-                    // სახე დაფიქსირდა
-                    if (window.isGamePausedByFace) {
-                        startResumeCountdown();
+        } else {
+            // სახე არ ჩანს - მხოლოდ მაშინ ვიწყებთ ტაიმერს, თუ თამაში არ არის პაუზაში
+            if (!window.isGamePausedByFace && !window.faceLostTimer && activeGame) {
+                window.faceLostTimer = setTimeout(() => { 
+                    if (!window.isGamePausedByFace && activeGame) {
+                        startPauseCountdown(); 
                     }
-                    if (window.faceLostTimer) { 
-                        clearTimeout(window.faceLostTimer); 
-                        window.faceLostTimer = null; 
-                    }
-                } else {
-                    // სახე არ ჩანს - მხოლოდ მაშინ ვიწყებთ ტაიმერს, თუ თამაში არ არის პაუზაში
-                    if (!window.isGamePausedByFace && !window.faceLostTimer && activeGame) {
-                        window.faceLostTimer = setTimeout(() => { 
-                            if (!window.isGamePausedByFace && activeGame) {
-                                startPauseCountdown(); 
-                            }
-                            window.faceLostTimer = null; 
-                        }, 3000);
-                    }
-                }
-            } catch(err) { 
-                console.error(err); 
+                    window.faceLostTimer = null; 
+                }, 3000);
             }
-            requestAnimationFrame(detect);
-        };
+        }
+    } catch(err) { 
+        console.error("დეტექციის შეცდომა:", err); 
+    }
+    requestAnimationFrame(detect);
+};
         
         detect();
         
