@@ -704,20 +704,17 @@ let faceApiStatus = {
     timer: null
 };
 
-// შეცვალეთ ეს ნაწილი
 async function preloadModels() {
     try {
-        // მითითება: face-api.js-ს სჭირდება მოდელების საქაღალდე. 
-        // თუ ვებ-სერვერზე გაქვთ, ჩაწერეთ './models'
         await faceapi.nets.tinyFaceDetector.loadFromUri('https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/weights');
-        
-        // მნიშვნელოვანი: ეს უნდა იყოს გლობალური ცვლადი, რასაც detect ფუნქცია დაინახავს
         window.modelsLoaded = true; 
-        console.log("მოდელები ჩატვირთულია");
+        console.log("✅ Face-api მოდელები წარმატებით ჩაიტვირთა!");
     } catch (e) {
-        console.error("მოდელების ჩატვირთვის შეცდომა:", e);
+        console.error("❌ მოდელების ჩატვირთვის შეცდომა:", e);
     }
 }
+// გაუშვით მოდელების ჩატვირთვა
+preloadModels();
 
     function showPopup(titleHtml, contentHtml, extraBtnsHtml = '') {
         const overlay = document.createElement('div'); overlay.className='modal-overlay';
