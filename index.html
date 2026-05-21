@@ -446,6 +446,11 @@
     margin-left: 10px;
 }
 
+#video {
+    object-fit: cover;
+    background: #000;
+}
+
     </style>
 </head>
 <body>
@@ -1176,32 +1181,42 @@ let faceDetected = true;
 let faceLostTimer = null;
 let isPaused = false;
 
-// კამერის გაშვება
 async function setupCamera() {
-    const stream = await navigator.mediaDevices.getUserMedia({ video: {} });
-    video.srcObject = stream;
-    await faceapi.nets.tinyFaceDetector.loadFromUri('https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/weights');
-}
+    const video = document.getElementById('video');
+    
+    if (!video) {
+        console.error("ვიდეო ელემენტი ვერ მოიძებნა!");
+        return;
+    }
 
-// სახის ამოცნობის ციკლი
-video.addEventListener('play', () => {
-    setInterval(async () => {
-        if (!activeGame) return; // თუ თამაში არ მიდის, სახის ამოცნობა არ გვჭირდება
-
-        const detections = await faceapi.detectAllFaces(video, new faceapi.TinyFaceDetectorOptions());
+    try {
+        // კამერის ნებართვის მოთხოვნა
+        const stream = await navigator.mediaDevices.getUserMedia({ 
+            video: { facingMode: 'user' }, // წინა კამერის გამოყენება
+            audio: false 
+        });
         
-        if (detections.length > 0) {
-            faceDetected = true;
-            clearTimeout(faceLostTimer);
-            if(isPaused) resumeGame();
-        } else if (faceDetected) {
-            faceDetected = false;
-            faceLostTimer = setTimeout(() => {
-                startPauseSequence();
-            }, 3000);
-        }
-    }, 1000);
-});
+        video.srcObject = stream;
+        
+        // მოდელების ჩატვირთვა
+        // დარწმუნდით, რომ ეს URL ხელმისაწვდომია
+        await faceapi.nets.tinyFaceDetector.loadFromUri('https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/weights');
+        
+        // დაველოდოთ ვიდეოს მზადყოფნას
+        return new Promise((resolve, reject) => {
+            video.onloadedmetadata = () => {
+                video.play()
+                    .then(() => resolve(video))
+                    .catch(err => reject(err));
+            };
+            video.onerror = (err) => reject(err);
+        });
+        
+    } catch (err) {
+        console.error("კამერის გაშვების შეცდომა:", err);
+        alert("კამერა ვერ ჩაირთო. გთხოვთ, შეამოწმოთ ნებართვები და გამოიყენოთ HTTPS.");
+    }
+}
 
 function startPauseSequence() {
     alert("სახე ვერ დაფიქსირდა. თამაში დაპაუზდება 5 წამში!");
@@ -1234,11 +1249,16 @@ function toggleCameraSize() {
     video.width = video.width === 120 ? 300 : 120;
 }
 function toggleCameraCollapse() {
-    document.getElementById('cameraContainer').style.display = 'none';
+    const container = document.getElementById('cameraContainer');
+    // თუ ზომა 120-ია, გავხადოთ 0 (ჩავკეცოთ), თუ 0-ია, გავხადოთ 120 (გავშალოთ)
+    if (container.style.height === '30px') {
+        container.style.height = 'auto'; // ან თქვენი სასურველი სიმაღლე
+        container.querySelector('video').style.display = 'block';
+    } else {
+        container.style.height = '30px'; 
+        container.querySelector('video').style.display = 'none';
+    }
 }
-
-// გაუშვით კამერა თამაშის დაწყებისას
-// setupCamera();
 
 function autoTimeout(){
         if(correctAnswered) return;
