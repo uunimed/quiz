@@ -651,6 +651,7 @@
     let phase = "thinking"; 
     let correctAnswered = false;
     let currentQuestionObj = null;
+    let pausedTimeLeft = null;
     
     // DOM Elements
     const loginScreen = document.getElementById('loginScreen');
@@ -803,6 +804,40 @@ function generateTable(data, columns, isLearnedPopup = false) {
         html += `</tbody></table>`;
         return html;
     }
+    
+    function renderCurrentCard() {
+    if (!activeGame || !currentQuestionObj) return;
+    
+    const item = currentQuestionObj.item;
+    let deHTML = formatDisplayWord(item);
+    let geHTML = item.ge;
+    
+    let questionHTML = '';
+    let answerHTML = '';
+    
+    if (gameDirection === 'ge-de') {
+        questionHTML = geHTML;
+        answerHTML = deHTML;
+    } else if (gameDirection === 'de-ge') {
+        questionHTML = deHTML;
+        answerHTML = geHTML;
+    } else {
+        let r = Math.random() < 0.5;
+        if (r) { questionHTML = geHTML; answerHTML = deHTML; }
+        else { questionHTML = deHTML; answerHTML = geHTML; }
+    }
+    
+    questionWordSpan.innerHTML = questionHTML;
+    targetRevealSpan.innerHTML = answerHTML;
+    targetRevealSpan.className = "target-box blurred-text";
+    
+    if (!isPaused) {
+        correctAnswered = false;
+        phase = "thinking";
+        updateTimerUI();
+    }
+}
+
     function escapeHtml(str) { if(!str) return ''; return str.replace(/[&<>]/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;'})[m]); }
     
     const CSV_URLS = {
@@ -1088,37 +1123,40 @@ function showRemainingWordsPopup() {
     };
 }
 
-async function startGameWithDirection(direction){
-if(!rawDataset.length){ showErrorPopup("მონაცემები არ არის"); return false; }
+async function startGameWithDirection(direction) {
+    if (!rawDataset.length) { 
+        showErrorPopup("მონაცემები არ არის"); 
+        return false; 
+    }
+    
     gameDirection = direction;
-        
-        // ფილტრაცია: ამოვიღოთ სიტყვები, რომლებიც უკვე ნასწავლი გვაქვს (learnedSet-შია)
-        gameItems = [...rawDataset]
-            .map((item,idx) => ({ ...item, originalIndex: idx }))
-            .filter(item => !learnedSet.has(item.originalIndex));
-            
-        // თუ აღმოჩნდა, რომ ყველა სიტყვა ნასწავლია
-        if(gameItems.length === 0){
-            showErrorPopup("ყველა სიტყვა ნასწავლია, რის გამოც თამაში ვერ გაგრძელდება.");
-            return false;
-        }
-
-        // ამოურევთ მხოლოდ დარჩენილ (სწავლების პროცესში მყოფ) სიტყვებს
-        for(let i=gameItems.length-1;i>0;i--){ 
-            let j=Math.floor(Math.random()*(i+1)); 
-            [gameItems[i],gameItems[j]]=[gameItems[j],gameItems[i]]; 
-        }
-        
-currentGameIndex = 0;
+    gameItems = [...rawDataset]
+        .map((item, idx) => ({ ...item, originalIndex: idx }))
+        .filter(item => !learnedSet.has(item.originalIndex));
+    
+    if (gameItems.length === 0) {
+        showErrorPopup("ყველა სიტყვა ნასწავლია, რის გამოც თამაში ვერ გაგრძელდება.");
+        return false;
+    }
+    
+    for (let i = gameItems.length - 1; i > 0; i--) {
+        let j = Math.floor(Math.random() * (i + 1));
+        [gameItems[i], gameItems[j]] = [gameItems[j], gameItems[i]];
+    }
+    
+    currentGameIndex = 0;
     activeGame = true;
+    isPaused = false;
+    faceDetected = true;
     attemptsTracker = {};
     correctAnswered = false;
-    if(timerInterval) clearInterval(timerInterval);
+    pausedTimeLeft = null;
+    
+    if (timerInterval) clearInterval(timerInterval);
     renderNextCard();
     
     return true;
 }
-    
     // განახლებული ბარათის გამოტანის ფუნქცია (ანახლებს მთვლელს თამაშის დროს)
     function renderNextCard(){
         if(!activeGame) return;
@@ -1200,40 +1238,63 @@ currentGameIndex = 0;
     }
     
     
-    let video = document.getElementById('video');
+let video = document.getElementById('video');
 let faceDetected = true;
 let faceLostTimer = null;
 let isPaused = false;
+let pausedTimeLeft = null;
+
 
 async function startFaceDetection() {
     const video = document.getElementById('video');
-    
-    // ველოდებით სანამ ვიდეო ნაკადი მზად იქნება
-    if (video.paused || video.ended) {
-        setTimeout(startFaceDetection, 500);
-        return;
-    }
 
     const detect = async () => {
-        if (!activeGame) return;
-
-        // detection - დაყენება
+    if (!activeGame && !isPaused) return;
+    
+    if (!modelsLoaded) {
+        requestAnimationFrame(detect);
+        return;
+    }
+    
+    try {
         const detection = await faceapi.detectSingleFace(video, new faceapi.TinyFaceDetectorOptions());
         
         if (detection) {
-            faceDetected = true;
-            clearTimeout(faceLostTimer);
-            if(isPaused) resumeGame();
+            // სახე არის
+            if (faceLostTimer) {
+                clearTimeout(faceLostTimer);
+                faceLostTimer = null;
+            }
+            
+            if (!faceDetected) {
+                faceDetected = true;
+                if (isPaused) {
+                    resumeGame();
+                }
+            }
         } else {
-            if (faceDetected) {
+            // სახე არ არის
+            if (faceDetected && !isPaused && activeGame) {
                 faceDetected = false;
+                
+                // 3 წამიანი პაუზის წინ გაფრთხილება
+                gameFeedbackSpan.innerText = "⚠️ სახე არ ფიქსირდება! 3 წამში თამაში შეჩერდება...";
+                
                 faceLostTimer = setTimeout(() => {
-                    if(!isPaused) pauseGame();
+                    if (!isPaused && activeGame) {
+                        pauseGame();
+                        gameFeedbackSpan.innerText = "🔴 თამაში დაპაუზებულია - გთხოვთ დაბრუნდით ეკრანის წინ";
+                    }
+                    faceLostTimer = null;
                 }, 3000);
             }
         }
-        requestAnimationFrame(detect);
-    };
+    } catch (err) {
+        console.error("Detection error:", err);
+    }
+    
+    requestAnimationFrame(detect);
+};
     
     detect();
 }
@@ -1282,20 +1343,53 @@ function startPauseSequence() {
 function pauseGame() {
     if (isPaused) return;
     isPaused = true;
-    activeGame = false; // თამაშის დროებითი გაჩერება
-    clearInterval(timerInterval);
-    alert("თამაში დაპაუზებულია, რადგან სახე ვერ დაფიქსირდა!");
+    activeGame = false;
+    
+    if (timerInterval) {
+        clearInterval(timerInterval);
+        timerInterval = null;
+    }
+    
+    // შევინახოთ დარჩენილი დრო მომავლისთვის
+    pausedTimeLeft = timeLeft;
+    
+    // დავმალოთ კითხვა და პასუხი
+    questionWordSpan.innerHTML = "👤 სახე არ ფიქსირდება";
+    targetRevealSpan.innerHTML = "⏸️ თამაში დაპაუზებულია";
+    targetRevealSpan.className = "target-box";
+    
+    gameFeedbackSpan.innerText = "ლოდინი...";
 }
 
 function resumeGame() {
-    if(!isPaused) return;
+    if (!isPaused) return;
     
-    // აქ შეგიძლია დაამატო პატარა Countdown 5-დან 0-მდე
-    setTimeout(() => {
-        isPaused = false;
-        activeGame = true;
-        renderNextCard(); // თამაშის განახლება
-    }, 5000);
+    let countdown = 5;
+    gameFeedbackSpan.innerText = `⏳ სახე დაფიქსირდა! თამაში განახლდება ${countdown} წამში...`;
+    
+    const interval = setInterval(() => {
+        countdown--;
+        if (countdown > 0) {
+            gameFeedbackSpan.innerText = `⏳ სახე დაფიქსირდა! თამაში განახლდება ${countdown} წამში...`;
+        } else {
+            clearInterval(interval);
+            isPaused = false;
+            activeGame = true;
+            
+            // აღვადგინოთ წინა მდგომარეობა
+            if (pausedTimeLeft !== undefined && pausedTimeLeft > 0) {
+                timeLeft = pausedTimeLeft;
+                updateTimerUI();
+            }
+            
+            // აღვადგინოთ ტაიმერი
+            if (timerInterval) clearInterval(timerInterval);
+            timerInterval = setInterval(updateTimer, 100);
+            
+            gameFeedbackSpan.innerText = "";
+            renderCurrentCard(); // აღვადგინოთ მიმდინარე ბარათი
+        }
+    }, 1000);
 }
 
 // კამერის ფუნქციები
@@ -1314,17 +1408,16 @@ function toggleCameraCollapse() {
     }
 }
 
-function autoTimeout(){
-        if(correctAnswered) return;
-        correctAnswered = true;
-        clearInterval(timerInterval);
-        
-        // დროის ამოწურვაც შეცდომაა, ამიტომ სიტყვას ვამატებთ რიგის ბოლოში
-        if(currentGameIndex < gameItems.length){
-            gameItems.push(gameItems[currentGameIndex]);
-        }
-        moveToNextCard();
+function autoTimeout() {
+    if (correctAnswered || !activeGame) return;
+    correctAnswered = true;
+    clearInterval(timerInterval);
+    
+    if (currentGameIndex < gameItems.length) {
+        gameItems.push(gameItems[currentGameIndex]);
     }
+    moveToNextCard();
+}
     
     function handleKnow(){
         if(!activeGame || correctAnswered) return;
@@ -1456,7 +1549,6 @@ function updateTimerUI(){
     cancelDirectionBtn.onclick = ()=>{ directionScreen.classList.add('hidden'); modeScreen.classList.remove('hidden'); };
     
 const dirBtns = document.querySelectorAll('.direction-btn');
-// ეს ჩაანაცვლეთ იმ ნაწილში, სადაც `dirBtns.forEach` - ია
 dirBtns.forEach(btn => {
     btn.onclick = async () => {
         let dir = btn.getAttribute('data-dir');
@@ -1466,8 +1558,11 @@ dirBtns.forEach(btn => {
         
         if (ok) {
             gameScreen.classList.remove('hidden');
+            
             const camContainer = document.getElementById('cameraContainer');
-            camContainer.classList.remove('hidden');
+            if (camContainer) {
+                camContainer.classList.remove('hidden');
+            }
             
             try {
                 const video = document.getElementById('video');
@@ -1475,88 +1570,35 @@ dirBtns.forEach(btn => {
                 video.srcObject = stream;
                 
                 await new Promise((resolve) => {
-                    video.onloadedmetadata = () => { video.play(); resolve(); };
+                    video.onloadedmetadata = () => {
+                        video.play();
+                        resolve();
+                    };
                 });
-
-                // ეს არის სუფთა და სწორი detect ფუნქცია
-                const detect = async () => {
-                    if (!activeGame) return;
-                    
-                    if (!modelsLoaded) {
-                        requestAnimationFrame(detect);
-                        return;
-                    }
-                    
-                    const detections = await faceapi.detectAllFaces(video, new faceapi.TinyFaceDetectorOptions());
-                    
-                    if (detections.length > 0) {
-                        faceDetected = true;
-                        clearTimeout(faceLostTimer);
-                        if(isPaused) resumeGame();
-                    } else if (faceDetected) {
-                        faceDetected = false;
-                        faceLostTimer = setTimeout(() => {
-                            if(!isPaused) pauseGame();
-                        }, 3000);
-                    }
-                    requestAnimationFrame(detect);
-                };
                 
-                detect();
-                console.log("კამერა და დეტექცია გაეშვა");
-                
-            } catch (err) {
-                console.error("შეცდომა:", err);
-            }
-        }
-    };
-});
-
-// შენს detect ფუნქციაში:
-const detect = async () => {
-    if (!activeGame) return;
-    
-    if (!modelsLoaded) { // თუ ჯერ არ ჩატვირთულა, დაელოდე
-        requestAnimationFrame(detect);
-        return;
-    }
-    
-    const detections = await faceapi.detectAllFaces(video, new faceapi.TinyFaceDetectorOptions());
-    // ... დანარჩენი კოდი
-                    
-                    if (detections.length > 0) {
-                        faceDetected = true;
-                        clearTimeout(faceLostTimer);
-                        if(isPaused) resumeGame();
-                    } else if (faceDetected) {
-                        faceDetected = false;
-                        faceLostTimer = setTimeout(() => {
-                            if(!isPaused) pauseGame();
-                        }, 3000);
-                    }
-                    requestAnimationFrame(detect);
-                };
-                detect();
+                // უბრალოდ გამოიძახე არსებული ფუნქცია
+                startFaceDetection();
                 
                 console.log("კამერა და დეტექცია გაეშვა");
             } catch (err) {
                 console.error("კამერის ან დეტექციის შეცდომა:", err);
                 alert("კამერა ვერ ჩაირთო. გთხოვთ, შეამოწმოთ ნებართვები.");
             }
-            
         } else { 
-            // თუ თამაში ვერ დაიწყო, დავბრუნდეთ რეჟიმების ეკრანზე
             modeScreen.classList.remove('hidden'); 
         }
     };
 });
     
-    exitGameBtn.onclick = ()=>{
-        if(timerInterval) clearInterval(timerInterval);
-        activeGame=false;
-        gameScreen.classList.add('hidden');
-        modeScreen.classList.remove('hidden');
-    };
+exitGameBtn.onclick = () => {
+    if (timerInterval) clearInterval(timerInterval);
+    activeGame = false;
+    isPaused = false;
+    faceDetected = true;
+    if (faceLostTimer) clearTimeout(faceLostTimer);
+    gameScreen.classList.add('hidden');
+    modeScreen.classList.remove('hidden');
+};
     
     correctGameBtn.onclick = handleKnow;
     wrongGameBtn.onclick = handleDontKnow;
