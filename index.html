@@ -1382,18 +1382,28 @@ function updateTimerUI(){
     cancelDirectionBtn.onclick = ()=>{ directionScreen.classList.add('hidden'); modeScreen.classList.remove('hidden'); };
     
 const dirBtns = document.querySelectorAll('.direction-btn');
-    dirBtns.forEach(btn=>{
-        btn.onclick = async ()=>{
-            let dir = btn.getAttribute('data-dir');
-            directionScreen.classList.add('hidden');
-            let ok = await startGameWithDirection(dir);
-            if(ok) {
-                gameScreen.classList.remove('hidden');
-            } else { 
-                modeScreen.classList.remove('hidden'); 
+dirBtns.forEach(btn=>{
+    btn.onclick = async ()=>{
+        let dir = btn.getAttribute('data-dir');
+        directionScreen.classList.add('hidden');
+        
+        let ok = await startGameWithDirection(dir);
+        if(ok) {
+            gameScreen.classList.remove('hidden');
+            
+            // აქ დავამატეთ კამერის გაშვება:
+            try {
+                await setupCamera();
+            } catch (err) {
+                console.error("კამერა ვერ ჩაირთო:", err);
+                // აქ შეგიძლიათ დაამატოთ alert("კამერა ვერ ჩაირთო");
             }
-        };
-    });
+            
+        } else { 
+            modeScreen.classList.remove('hidden'); 
+        }
+    };
+});
     
     exitGameBtn.onclick = ()=>{
         if(timerInterval) clearInterval(timerInterval);
