@@ -451,6 +451,19 @@
     background: #000;
 }
 
+#cameraContainer {
+    position: fixed;
+    top: 20px;
+    left: 20px;
+    z-index: 9999; /* ყველაზე ზემოთ */
+    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+}
+
+/* რომ არ გამოჩნდეს მაშინვე, როცა თამაში არ მიდის */
+#cameraContainer.hidden {
+    display: none;
+}
+
     </style>
 </head>
 <body>
@@ -560,11 +573,14 @@
         </div>
     </div>
 
-<div id="cameraContainer" style="position: fixed; top: 10px; left: 10px; z-index: 1000; border: 2px solid #4a90e2; border-radius: 12px; overflow: hidden; width: 120px; resize: both; cursor: grab;">
+<!-- ეს უნდა იყოს body-ს პირდაპირ შვილი და არა app-container-ის შიგნით -->
+<div id="cameraContainer" style="position: fixed; top: 10px; left: 10px; z-index: 9999; border: 2px solid #4a90e2; border-radius: 12px; overflow: hidden; width: 120px; cursor: grab;">
     <video id="video" width="100%" height="auto" autoplay muted playsinline></video>
-    <!-- ღილაკი ჩაკეცვისთვის -->
     <div id="collapseBtn" style="cursor: pointer; background: #4a90e2; color: white; text-align: center; font-size: 12px; padding: 2px;">—</div>
 </div>
+
+<div class="app-container" id="appRoot">
+    <!-- აქ იქნება შიგთავსი -->
 </div>
 
     <!-- GAME -->
