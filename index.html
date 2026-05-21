@@ -695,9 +695,11 @@ function showErrorPopup(msg) {
         overlay.querySelector('.close-err-btn').onclick = () => overlay.remove();
     }
     
-    // მოდელების ერთჯერადი ჩატვირთვა გვერდის გახსნისას
+let modelsLoaded = false; // დაამატე ეს ცვლადი თავში, Global state-თან
+
 async function preloadModels() {
     await faceapi.nets.tinyFaceDetector.loadFromUri('https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/weights');
+    modelsLoaded = true; // მონიშნე რომ ჩაიტვირთა
     console.log("მოდელები ჩატვირთულია!");
 }
 preloadModels(); // გაეშვება ავტომატურად
@@ -1454,43 +1456,73 @@ function updateTimerUI(){
     cancelDirectionBtn.onclick = ()=>{ directionScreen.classList.add('hidden'); modeScreen.classList.remove('hidden'); };
     
 const dirBtns = document.querySelectorAll('.direction-btn');
+// ეს ჩაანაცვლეთ იმ ნაწილში, სადაც `dirBtns.forEach` - ია
 dirBtns.forEach(btn => {
     btn.onclick = async () => {
         let dir = btn.getAttribute('data-dir');
         directionScreen.classList.add('hidden');
         
-        // თამაშის ინიციალიზაცია
         let ok = await startGameWithDirection(dir);
         
         if (ok) {
             gameScreen.classList.remove('hidden');
-            
-            // კამერის კონტეინერის გამოჩენა
             const camContainer = document.getElementById('cameraContainer');
-            if (camContainer) {
-                camContainer.classList.remove('hidden');
-            }
+            camContainer.classList.remove('hidden');
             
-            // კამერის გაშვება და სახის დეტექციის დაწყება
             try {
-                // 1. კამერის ნაკადის მიღება
                 const video = document.getElementById('video');
                 const stream = await navigator.mediaDevices.getUserMedia({ video: true });
                 video.srcObject = stream;
                 
-                // 2. ლოდინი ვიდეოს ჩატვირთვამდე
                 await new Promise((resolve) => {
-                    video.onloadedmetadata = () => {
-                        video.play();
-                        resolve();
-                    };
+                    video.onloadedmetadata = () => { video.play(); resolve(); };
                 });
 
-                // 3. სახის ამოცნობის დაწყება
+                // ეს არის სუფთა და სწორი detect ფუნქცია
                 const detect = async () => {
                     if (!activeGame) return;
                     
+                    if (!modelsLoaded) {
+                        requestAnimationFrame(detect);
+                        return;
+                    }
+                    
                     const detections = await faceapi.detectAllFaces(video, new faceapi.TinyFaceDetectorOptions());
+                    
+                    if (detections.length > 0) {
+                        faceDetected = true;
+                        clearTimeout(faceLostTimer);
+                        if(isPaused) resumeGame();
+                    } else if (faceDetected) {
+                        faceDetected = false;
+                        faceLostTimer = setTimeout(() => {
+                            if(!isPaused) pauseGame();
+                        }, 3000);
+                    }
+                    requestAnimationFrame(detect);
+                };
+                
+                detect();
+                console.log("კამერა და დეტექცია გაეშვა");
+                
+            } catch (err) {
+                console.error("შეცდომა:", err);
+            }
+        }
+    };
+});
+
+// შენს detect ფუნქციაში:
+const detect = async () => {
+    if (!activeGame) return;
+    
+    if (!modelsLoaded) { // თუ ჯერ არ ჩატვირთულა, დაელოდე
+        requestAnimationFrame(detect);
+        return;
+    }
+    
+    const detections = await faceapi.detectAllFaces(video, new faceapi.TinyFaceDetectorOptions());
+    // ... დანარჩენი კოდი
                     
                     if (detections.length > 0) {
                         faceDetected = true;
