@@ -706,7 +706,9 @@ let faceApiStatus = {
 
 async function preloadModels() {
     try {
-        await faceapi.nets.tinyFaceDetector.loadFromUri('https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/weights');
+        // შეცვალეთ აქ:
+        await faceapi.nets.tinyFaceDetector.loadFromUri('/models');
+
         window.modelsLoaded = true; 
         console.log("✅ Face-api მოდელები წარმატებით ჩაიტვირთა!");
     } catch (e) {
