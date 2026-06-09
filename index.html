@@ -1578,14 +1578,13 @@ dirBtns.forEach(btn => {
                     };
                 });
 
-                // სახის დეტექციის ფუნქცია - გლობალური ცვლადების გამოყენებით
+ // სახის დეტექციის ფუნქცია - გლობალური ცვლადების გამოყენებით
                 window.faceDetectionActive = true;
                 gamePausedByFace = false;
                 window.pauseCountdownInterval = null;
                 window.resumeCountdownInterval = null;
-                window.faceLostTimer = null;
 
- const startPauseCountdown = () => {
+                const startPauseCountdown = () => {
                     if (gamePausedByFace || window.pauseCountdownInterval) return;
                     
                     let countdown = 5;
@@ -1594,10 +1593,11 @@ dirBtns.forEach(btn => {
                     popupOverlay.id = 'facePauseOverlay';
                     popupOverlay.style.zIndex = '2000';
                     const div = document.createElement('div'); 
-                    div.style.cssText = 'background:#fff; padding:32px; border-radius:20px; text-align:center; max-width:300px;';
+                    // max-width გავზარდეთ 450px-მდე და width: 90% დავამატეთ
+                    div.style.cssText = 'background:#fff; padding:32px; border-radius:20px; text-align:center; width:90%; max-width:450px;';
                     
                     div.innerHTML = `
-                        <h3 style="color:#ef4444; display:flex; align-items:center; justify-content:center; gap:8px; margin-bottom:12px;">
+                        <h3 style="color:#ef4444; display:flex; align-items:center; justify-content:center; gap:8px; margin-bottom:12px; white-space:nowrap;">
                             <svg viewBox="0 0 24 24" width="28" height="28" fill="currentColor">
                                 <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/>
                             </svg>
@@ -1620,9 +1620,9 @@ dirBtns.forEach(btn => {
                             clearInterval(window.pauseCountdownInterval); 
                             window.pauseCountdownInterval = null;
                             
-                            // ფანჯრის წაშლის ნაცვლად, შიგთავსს ვცვლით პაუზის დიზაინით
+                            // ფანჯრის შიგთავსს ვცვლით პაუზის დიზაინით
                             div.innerHTML = `
-                                <h3 style="color:#ef4444; display:flex; align-items:center; justify-content:center; gap:8px; margin-bottom:12px;">
+                                <h3 style="color:#ef4444; display:flex; align-items:center; justify-content:center; gap:8px; margin-bottom:12px; white-space:nowrap;">
                                     <svg viewBox="0 0 24 24" width="28" height="28" fill="currentColor">
                                         <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>
                                     </svg>
@@ -1655,20 +1655,20 @@ dirBtns.forEach(btn => {
                 const startResumeCountdown = () => {
                     if (!gamePausedByFace || window.resumeCountdownInterval) return;
                     
-                    // წავშალოთ პაუზის ფანჯარა რადგან გაგრძელების ტაიმერს ვიწყებთ
                     const existingPause = document.getElementById('facePauseOverlay');
                     if(existingPause) existingPause.remove();
                     
-                    let countdown = 3; // 5-ის ნაცვლად გახდა 3 წამი
+                    let countdown = 3; 
                     const popupOverlay = document.createElement('div'); 
                     popupOverlay.className = 'modal-overlay'; 
                     popupOverlay.id = 'faceResumeOverlay';
                     popupOverlay.style.zIndex = '2000';
                     const div = document.createElement('div'); 
-                    div.style.cssText = 'background:#fff; padding:32px; border-radius:20px; text-align:center; max-width:300px;';
+                    // max-width გავზარდეთ 450px-მდე
+                    div.style.cssText = 'background:#fff; padding:32px; border-radius:20px; text-align:center; width:90%; max-width:450px;';
                     
                     div.innerHTML = `
-                        <h3 style="color:#10b981; display:flex; align-items:center; justify-content:center; gap:8px; margin-bottom:12px;">
+                        <h3 style="color:#10b981; display:flex; align-items:center; justify-content:center; gap:8px; margin-bottom:12px; white-space:nowrap;">
                             <svg viewBox="0 0 24 24" width="28" height="28" fill="currentColor">
                                 <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
                             </svg>
@@ -1720,7 +1720,6 @@ dirBtns.forEach(btn => {
                     }, 1000);
                 };
 
-                // შევამციროთ inputSize მეტი სისწრაფისთვის
                 const detectionOptions = new faceapi.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.4 });
 
                 const detect = async () => {
@@ -1753,10 +1752,6 @@ dirBtns.forEach(btn => {
                                     const pOverlay = document.getElementById('facePauseOverlay');
                                     if (pOverlay) pOverlay.remove();
                                 }
-                                if (window.faceLostTimer) { 
-                                    clearTimeout(window.faceLostTimer); 
-                                    window.faceLostTimer = null; 
-                                }
                             }
                         } else {
                             // --- სახე არ ჩანს ---
@@ -1772,11 +1767,9 @@ dirBtns.forEach(btn => {
                                     if (rOverlay) rOverlay.remove();
                                 }
                             } else {
-                                if (!window.faceLostTimer && !window.pauseCountdownInterval && activeGame) {
-                                    window.faceLostTimer = setTimeout(() => { 
-                                        startPauseCountdown(); 
-                                        window.faceLostTimer = null; 
-                                    }, 3000);
+                                // ამოღებულია სახის დაკარგვის 3 წამიანი ტაიმერი - იწყება დაუყოვნებლივ
+                                if (!window.pauseCountdownInterval && activeGame) {
+                                    startPauseCountdown(); 
                                 }
                             }
                         }
@@ -1784,7 +1777,6 @@ dirBtns.forEach(btn => {
                         console.error("დეტექციის შეცდომა:", err); 
                     }
                     
-                    // requestAnimationFrame-ის ნაცვლად ვიყენებთ setTimeout-ს
                     setTimeout(detect, 200);
                 };
                 
@@ -1797,7 +1789,6 @@ dirBtns.forEach(btn => {
             }
             
         } else { 
-            // თუ თამაში ვერ დაიწყო, დავბრუნდეთ რეჟიმების ეკრანზე
             modeScreen.classList.remove('hidden'); 
         }
     };
