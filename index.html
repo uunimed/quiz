@@ -1554,197 +1554,205 @@ dirBtns.forEach(btn => {
         // თამაშის ინიციალიზაცია
         let ok = await startGameWithDirection(dir);
         
-if (ok) {
-    gameScreen.classList.remove('hidden');
-    
-    // კამერის კონტეინერის გამოჩენა
-    const camContainer = document.getElementById('cameraContainer');
-    if (camContainer) {
-        camContainer.classList.remove('hidden');
-    }
-    
-    // კამერის გაშვება და სახის დეტექციის დაწყება
-    try {
-        // 1. კამერის ნაკადის მიღება
-        const video = document.getElementById('video');
-        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-        video.srcObject = stream;
-        
-        // 2. ლოდინი ვიდეოს ჩატვირთვამდე
-        await new Promise((resolve) => {
-            video.onloadedmetadata = () => {
-                video.play();
-                resolve();
-            };
-        });
-
-        // სახის დეტექციის ფუნქცია - გლობალური ცვლადების გამოყენებით
-        window.faceDetectionActive = true;
-        gamePausedByFace = false;
-        window.pauseCountdownInterval = null;
-        window.resumeCountdownInterval = null;
-        window.faceLostTimer = null;
-
-        const startPauseCountdown = () => {
-            if (gamePausedByFace) return;
+        if (ok) {
+            gameScreen.classList.remove('hidden');
             
-            // გავასუფთავოთ არსებული ტაიმერი
-            if (window.pauseCountdownInterval) {
-                clearInterval(window.pauseCountdownInterval);
+            // კამერის კონტეინერის გამოჩენა
+            const camContainer = document.getElementById('cameraContainer');
+            if (camContainer) {
+                camContainer.classList.remove('hidden');
+            }
+            
+            // კამერის გაშვება და სახის დეტექციის დაწყება
+            try {
+                // 1. კამერის ნაკადის მიღება
+                const video = document.getElementById('video');
+                const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+                video.srcObject = stream;
+                
+                // 2. ლოდინი ვიდეოს ჩატვირთვამდე
+                await new Promise((resolve) => {
+                    video.onloadedmetadata = () => {
+                        video.play();
+                        resolve();
+                    };
+                });
+
+                // სახის დეტექციის ფუნქცია - გლობალური ცვლადების გამოყენებით
+                window.faceDetectionActive = true;
+                gamePausedByFace = false;
                 window.pauseCountdownInterval = null;
-            }
-            
-            let countdown = 5;
-            const popupOverlay = document.createElement('div'); 
-            popupOverlay.className='modal-overlay'; 
-            popupOverlay.id = 'facePauseOverlay';
-            popupOverlay.style.zIndex='2000';
-            const div = document.createElement('div'); 
-            div.style.cssText='background:#fff; padding:32px; border-radius:20px; text-align:center; max-width:300px;';
-            div.innerHTML = `<h3 style="color:#ef4444;">⚠️ სახე არ დაფიქსირდა</h3><p>თამაში ავტომატურად დაპაუზდება:</p><div style="font-size:48px; font-weight:bold; color:#4a90e2;" id="pauseCountdownNumber">5</div><p>გთხოვთ, დაუბრუნდით კამერას</p>`;
-            popupOverlay.appendChild(div); 
-            document.body.appendChild(popupOverlay);
-            
-            window.pauseCountdownInterval = setInterval(() => {
-                countdown--;
-                const numDiv = div.querySelector('#pauseCountdownNumber'); 
-                if(numDiv) numDiv.textContent = countdown;
-                
-                if(countdown <= 0){
-                    clearInterval(window.pauseCountdownInterval); 
-                    window.pauseCountdownInterval = null;
-                    popupOverlay.remove();
-                    
-                    if(!gamePausedByFace && activeGame){
-                        gamePausedByFace = true;
-                        if(timerInterval) { 
-                            clearInterval(timerInterval); 
-                            timerInterval = null; 
-                        }
-                        questionWordSpan.style.opacity = '0.5';
-                        targetRevealSpan.style.opacity = '0.5';
-                        gameFeedbackSpan.innerText = "⏸️ თამაში დაპაუზებულია - გთხოვთ, დაუბრუნდით კამერას";
-                    }
-                }
-            }, 1000);
-        };
-
-        const startResumeCountdown = () => {
-            if (!gamePausedByFace) return;
-            
-            if(window.resumeCountdownInterval) {
-                clearInterval(window.resumeCountdownInterval);
                 window.resumeCountdownInterval = null;
-            }
-            
-            // წავშალოთ არსებული პაუზის პოპაპი
-            const existing = document.getElementById('facePauseOverlay');
-            if(existing) existing.remove();
-            
-            let countdown = 5;
-            const popupOverlay = document.createElement('div'); 
-            popupOverlay.className='modal-overlay'; 
-            popupOverlay.id = 'faceResumeOverlay';
-            popupOverlay.style.zIndex='2000';
-            const div = document.createElement('div'); 
-            div.style.cssText='background:#fff; padding:32px; border-radius:20px; text-align:center; max-width:300px;';
-            div.innerHTML = `<h3 style="color:#10b981;">✅ სახე დაფიქსირდა</h3><p>თამაში ავტომატურად გაგრძელდება:</p><div style="font-size:48px; font-weight:bold; color:#4a90e2;" id="resumeCountdownNumber">5</div>`;
-            popupOverlay.appendChild(div); 
-            document.body.appendChild(popupOverlay);
-            
-            window.resumeCountdownInterval = setInterval(() => {
-                countdown--;
-                const numDiv = div.querySelector('#resumeCountdownNumber'); 
-                if(numDiv) numDiv.textContent = countdown;
-                
-                if(countdown <= 0){
-                    clearInterval(window.resumeCountdownInterval); 
-                    window.resumeCountdownInterval = null;
-                    popupOverlay.remove();
+                window.faceLostTimer = null;
+
+                const startPauseCountdown = () => {
+                    // თუ უკვე პაუზაზე ვართ ან ტაიმერი უკვე მიმდინარეობს, შევაჩეროთ
+                    if (gamePausedByFace || window.pauseCountdownInterval) return;
                     
-                    if(gamePausedByFace){
-                        gamePausedByFace = false;
-                        questionWordSpan.style.opacity = '1';
-                        targetRevealSpan.style.opacity = '1';
+                    let countdown = 5;
+                    const popupOverlay = document.createElement('div'); 
+                    popupOverlay.className = 'modal-overlay'; 
+                    popupOverlay.id = 'facePauseOverlay';
+                    popupOverlay.style.zIndex = '2000';
+                    const div = document.createElement('div'); 
+                    div.style.cssText = 'background:#fff; padding:32px; border-radius:20px; text-align:center; max-width:300px;';
+                    div.innerHTML = `<h3 style="color:#ef4444;">⚠️ სახე არ დაფიქსირდა</h3><p>თამაში ავტომატურად დაპაუზდება:</p><div style="font-size:48px; font-weight:bold; color:#4a90e2;" id="pauseCountdownNumber">5</div><p>გთხოვთ, დაუბრუნდით კამერას</p>`;
+                    popupOverlay.appendChild(div); 
+                    document.body.appendChild(popupOverlay);
+                    
+                    window.pauseCountdownInterval = setInterval(() => {
+                        countdown--;
+                        const numDiv = div.querySelector('#pauseCountdownNumber'); 
+                        if(numDiv) numDiv.textContent = countdown;
                         
-                        if(activeGame && !correctAnswered){
-                            if(timerInterval) clearInterval(timerInterval);
-                            timerInterval = setInterval(updateTimer, 100);
+                        if(countdown <= 0){
+                            clearInterval(window.pauseCountdownInterval); 
+                            window.pauseCountdownInterval = null;
+                            popupOverlay.remove();
+                            
+                            if(!gamePausedByFace && activeGame){
+                                gamePausedByFace = true;
+                                if(timerInterval) { 
+                                    clearInterval(timerInterval); 
+                                    timerInterval = null; 
+                                }
+                                questionWordSpan.style.opacity = '0.5';
+                                targetRevealSpan.style.opacity = '0.5';
+                                gameFeedbackSpan.innerText = "⏸️ თამაში დაპაუზებულია - გთხოვთ, დაუბრუნდით კამერას";
+                            }
                         }
+                    }, 1000);
+                };
+
+                const startResumeCountdown = () => {
+                    // თუ თამაში პაუზაზე არ არის ან გაგრძელების ტაიმერი ჩართულია, შევაჩეროთ
+                    if (!gamePausedByFace || window.resumeCountdownInterval) return;
+                    
+                    // წავშალოთ პაუზის ფანჯარა თუ ღია დარჩა
+                    const existingPause = document.getElementById('facePauseOverlay');
+                    if(existingPause) existingPause.remove();
+                    
+                    let countdown = 5;
+                    const popupOverlay = document.createElement('div'); 
+                    popupOverlay.className = 'modal-overlay'; 
+                    popupOverlay.id = 'faceResumeOverlay';
+                    popupOverlay.style.zIndex = '2000';
+                    const div = document.createElement('div'); 
+                    div.style.cssText = 'background:#fff; padding:32px; border-radius:20px; text-align:center; max-width:300px;';
+                    div.innerHTML = `<h3 style="color:#10b981;">✅ სახე დაფიქსირდა</h3><p>თამაში ავტომატურად გაგრძელდება:</p><div style="font-size:48px; font-weight:bold; color:#4a90e2;" id="resumeCountdownNumber">5</div>`;
+                    popupOverlay.appendChild(div); 
+                    document.body.appendChild(popupOverlay);
+                    
+                    window.resumeCountdownInterval = setInterval(() => {
+                        countdown--;
+                        const numDiv = div.querySelector('#resumeCountdownNumber'); 
+                        if(numDiv) numDiv.textContent = countdown;
                         
-                        gameFeedbackSpan.innerText = "▶️ თამაში გაგრძელდა!";
-                        setTimeout(()=>{ 
-                            if(gameFeedbackSpan.innerText === "▶️ თამაში გაგრძელდა!") 
-                                gameFeedbackSpan.innerText = ""; 
-                        }, 3000);
-                    }
-                }
-            }, 1000);
-        };
+                        if(countdown <= 0){
+                            clearInterval(window.resumeCountdownInterval); 
+                            window.resumeCountdownInterval = null;
+                            popupOverlay.remove();
+                            
+                            if(gamePausedByFace){
+                                gamePausedByFace = false;
+                                questionWordSpan.style.opacity = '1';
+                                targetRevealSpan.style.opacity = '1';
+                                
+                                if(activeGame && !correctAnswered){
+                                    if(timerInterval) clearInterval(timerInterval);
+                                    timerInterval = setInterval(updateTimer, 100);
+                                }
+                                
+                                gameFeedbackSpan.innerText = "▶️ თამაში გაგრძელდა!";
+                                setTimeout(() => { 
+                                    if(gameFeedbackSpan.innerText === "▶️ თამაში გაგრძელდა!") 
+                                        gameFeedbackSpan.innerText = ""; 
+                                }, 3000);
+                            }
+                        }
+                    }, 1000);
+                };
 
-const detect = async () => {
-    if (!window.faceDetectionActive || !activeGame || !video || video.paused || !modelsLoaded) {
-        if(window.faceDetectionActive) requestAnimationFrame(detect);
-        return;
-    }
-    
-    try {
-        const detection = await faceapi.detectSingleFace(video, new faceapi.TinyFaceDetectorOptions());
-        const canvas = document.getElementById('overlay');
-        
-        if (detection) {
-            // --- სახე დაფიქსირდა: ვხატავთ მწვანე ჩარჩოს ---
-            if (canvas) {
-                const displaySize = { width: video.videoWidth, height: video.videoHeight };
-                faceapi.matchDimensions(canvas, displaySize);
-                const resizedDetections = faceapi.resizeResults(detection, displaySize);
+                // შევამციროთ inputSize მეტი სისწრაფისთვის
+                const detectionOptions = new faceapi.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.4 });
+
+                const detect = async () => {
+                    if (!window.faceDetectionActive || !activeGame || !video || video.paused || !modelsLoaded) {
+                        if(window.faceDetectionActive) setTimeout(detect, 200);
+                        return;
+                    }
+                    
+                    try {
+                        const detection = await faceapi.detectSingleFace(video, detectionOptions);
+                        const canvas = document.getElementById('overlay');
+                        
+                        if (detection) {
+                            // --- სახე დაფიქსირდა ---
+                            if (canvas) {
+                                const displaySize = { width: video.videoWidth, height: video.videoHeight };
+                                faceapi.matchDimensions(canvas, displaySize);
+                                const resizedDetections = faceapi.resizeResults(detection, displaySize);
+                                canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
+                                const drawBox = new faceapi.draw.DrawBox(resizedDetections.box, { boxColor: '#10b981', lineWidth: 2 });
+                                drawBox.draw(canvas);
+                            }
+
+                            if (gamePausedByFace) {
+                                startResumeCountdown();
+                            } else {
+                                if (window.pauseCountdownInterval) {
+                                    clearInterval(window.pauseCountdownInterval);
+                                    window.pauseCountdownInterval = null;
+                                    const pOverlay = document.getElementById('facePauseOverlay');
+                                    if (pOverlay) pOverlay.remove();
+                                }
+                                if (window.faceLostTimer) { 
+                                    clearTimeout(window.faceLostTimer); 
+                                    window.faceLostTimer = null; 
+                                }
+                            }
+                        } else {
+                            // --- სახე არ ჩანს ---
+                            if (canvas) {
+                                canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
+                            }
+
+                            if (gamePausedByFace) {
+                                if (window.resumeCountdownInterval) {
+                                    clearInterval(window.resumeCountdownInterval);
+                                    window.resumeCountdownInterval = null;
+                                    const rOverlay = document.getElementById('faceResumeOverlay');
+                                    if (rOverlay) rOverlay.remove();
+                                }
+                            } else {
+                                if (!window.faceLostTimer && !window.pauseCountdownInterval && activeGame) {
+                                    window.faceLostTimer = setTimeout(() => { 
+                                        startPauseCountdown(); 
+                                        window.faceLostTimer = null; 
+                                    }, 3000);
+                                }
+                            }
+                        }
+                    } catch(err) { 
+                        console.error("დეტექციის შეცდომა:", err); 
+                    }
+                    
+                    // requestAnimationFrame-ის ნაცვლად ვიყენებთ setTimeout-ს
+                    setTimeout(detect, 200);
+                };
                 
-                canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
-                // ფერის შეცვლა შეგიძლია აქ (ახლა არის მწვანე #10b981)
-                const drawBox = new faceapi.draw.DrawBox(resizedDetections.box, { boxColor: '#10b981', lineWidth: 2 });
-                drawBox.draw(canvas);
+                detect();
+                console.log("კამერა და დეტექცია გაეშვა");
+                
+            } catch (err) {
+                console.error("კამერის ან დეტექციის შეცდომა:", err);
+                alert("კამერა ვერ ჩაირთო. გთხოვთ, შეამოწმოთ ნებართვები.");
             }
-
-            if (gamePausedByFace) {
-                startResumeCountdown();
-            }
-            if (window.faceLostTimer) { 
-                clearTimeout(window.faceLostTimer); 
-                window.faceLostTimer = null; 
-            }
-        } else {
-            // --- სახე არ ჩანს: ვშლით ჩარჩოს ---
-            if (canvas) {
-                canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
-            }
-
-            if (!gamePausedByFace && !window.faceLostTimer && activeGame) {
-                window.faceLostTimer = setTimeout(() => { 
-                    if (!gamePausedByFace && activeGame) {
-                        startPauseCountdown(); 
-                    }
-                    window.faceLostTimer = null; 
-                }, 3000);
-            }
+            
+        } else { 
+            // თუ თამაში ვერ დაიწყო, დავბრუნდეთ რეჟიმების ეკრანზე
+            modeScreen.classList.remove('hidden'); 
         }
-    } catch(err) { 
-        console.error("დეტექციის შეცდომა:", err); 
-    }
-    requestAnimationFrame(detect);
-};
-        
-        detect();
-        
-        console.log("კამერა და დეტექცია გაეშვა");
-    } catch (err) {
-        console.error("კამერის ან დეტექციის შეცდომა:", err);
-        alert("კამერა ვერ ჩაირთო. გთხოვთ, შეამოწმოთ ნებართვები.");
-    }
-    
-} else { 
-    // თუ თამაში ვერ დაიწყო, დავბრუნდეთ რეჟიმების ეკრანზე
-    modeScreen.classList.remove('hidden'); 
-}
     };
 });
     
