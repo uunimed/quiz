@@ -1585,8 +1585,7 @@ dirBtns.forEach(btn => {
                 window.resumeCountdownInterval = null;
                 window.faceLostTimer = null;
 
-                const startPauseCountdown = () => {
-                    // თუ უკვე პაუზაზე ვართ ან ტაიმერი უკვე მიმდინარეობს, შევაჩეროთ
+ const startPauseCountdown = () => {
                     if (gamePausedByFace || window.pauseCountdownInterval) return;
                     
                     let countdown = 5;
@@ -1596,7 +1595,19 @@ dirBtns.forEach(btn => {
                     popupOverlay.style.zIndex = '2000';
                     const div = document.createElement('div'); 
                     div.style.cssText = 'background:#fff; padding:32px; border-radius:20px; text-align:center; max-width:300px;';
-                    div.innerHTML = `<h3 style="color:#ef4444;">⚠️ სახე არ დაფიქსირდა</h3><p>თამაში ავტომატურად დაპაუზდება:</p><div style="font-size:48px; font-weight:bold; color:#4a90e2;" id="pauseCountdownNumber">5</div><p>გთხოვთ, დაუბრუნდით კამერას</p>`;
+                    
+                    div.innerHTML = `
+                        <h3 style="color:#ef4444; display:flex; align-items:center; justify-content:center; gap:8px; margin-bottom:12px;">
+                            <svg viewBox="0 0 24 24" width="28" height="28" fill="currentColor">
+                                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/>
+                            </svg>
+                            სახე არ დაფიქსირდა
+                        </h3>
+                        <p style="color:#475569;">თამაში ავტომატურად დაპაუზდება:</p>
+                        <div style="font-size:48px; font-weight:bold; color:#4a90e2; margin:8px 0;" id="pauseCountdownNumber">5</div>
+                        <p style="color:#64748b; font-size:0.9rem;">გთხოვთ, დაუბრუნდით კამერას</p>
+                    `;
+                    
                     popupOverlay.appendChild(div); 
                     document.body.appendChild(popupOverlay);
                     
@@ -1608,7 +1619,17 @@ dirBtns.forEach(btn => {
                         if(countdown <= 0){
                             clearInterval(window.pauseCountdownInterval); 
                             window.pauseCountdownInterval = null;
-                            popupOverlay.remove();
+                            
+                            // ფანჯრის წაშლის ნაცვლად, შიგთავსს ვცვლით პაუზის დიზაინით
+                            div.innerHTML = `
+                                <h3 style="color:#ef4444; display:flex; align-items:center; justify-content:center; gap:8px; margin-bottom:12px;">
+                                    <svg viewBox="0 0 24 24" width="28" height="28" fill="currentColor">
+                                        <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>
+                                    </svg>
+                                    თამაში დაპაუზებულია
+                                </h3>
+                                <p style="color:#475569; margin-top:16px;">დაუბრუნდით კამერას გასაგრძელებლად</p>
+                            `;
                             
                             if(!gamePausedByFace && activeGame){
                                 gamePausedByFace = true;
@@ -1618,28 +1639,45 @@ dirBtns.forEach(btn => {
                                 }
                                 questionWordSpan.style.opacity = '0.5';
                                 targetRevealSpan.style.opacity = '0.5';
-                                gameFeedbackSpan.innerText = "⏸️ თამაში დაპაუზებულია - გთხოვთ, დაუბრუნდით კამერას";
+                                gameFeedbackSpan.innerHTML = `
+                                    <span style="display:inline-flex; align-items:center; justify-content:center; gap:6px; color:#ef4444;">
+                                        <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+                                            <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>
+                                        </svg>
+                                        თამაში დაპაუზებულია
+                                    </span>
+                                `;
                             }
                         }
                     }, 1000);
                 };
 
                 const startResumeCountdown = () => {
-                    // თუ თამაში პაუზაზე არ არის ან გაგრძელების ტაიმერი ჩართულია, შევაჩეროთ
                     if (!gamePausedByFace || window.resumeCountdownInterval) return;
                     
-                    // წავშალოთ პაუზის ფანჯარა თუ ღია დარჩა
+                    // წავშალოთ პაუზის ფანჯარა რადგან გაგრძელების ტაიმერს ვიწყებთ
                     const existingPause = document.getElementById('facePauseOverlay');
                     if(existingPause) existingPause.remove();
                     
-                    let countdown = 5;
+                    let countdown = 3; // 5-ის ნაცვლად გახდა 3 წამი
                     const popupOverlay = document.createElement('div'); 
                     popupOverlay.className = 'modal-overlay'; 
                     popupOverlay.id = 'faceResumeOverlay';
                     popupOverlay.style.zIndex = '2000';
                     const div = document.createElement('div'); 
                     div.style.cssText = 'background:#fff; padding:32px; border-radius:20px; text-align:center; max-width:300px;';
-                    div.innerHTML = `<h3 style="color:#10b981;">✅ სახე დაფიქსირდა</h3><p>თამაში ავტომატურად გაგრძელდება:</p><div style="font-size:48px; font-weight:bold; color:#4a90e2;" id="resumeCountdownNumber">5</div>`;
+                    
+                    div.innerHTML = `
+                        <h3 style="color:#10b981; display:flex; align-items:center; justify-content:center; gap:8px; margin-bottom:12px;">
+                            <svg viewBox="0 0 24 24" width="28" height="28" fill="currentColor">
+                                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+                            </svg>
+                            სახე დაფიქსირდა
+                        </h3>
+                        <p style="color:#475569;">თამაში გაგრძელდება:</p>
+                        <div style="font-size:48px; font-weight:bold; color:#4a90e2; margin:8px 0;" id="resumeCountdownNumber">3</div>
+                    `;
+                    
                     popupOverlay.appendChild(div); 
                     document.body.appendChild(popupOverlay);
                     
@@ -1663,10 +1701,19 @@ dirBtns.forEach(btn => {
                                     timerInterval = setInterval(updateTimer, 100);
                                 }
                                 
-                                gameFeedbackSpan.innerText = "▶️ თამაში გაგრძელდა!";
+                                gameFeedbackSpan.innerHTML = `
+                                    <span style="display:inline-flex; align-items:center; justify-content:center; gap:6px; color:#10b981;">
+                                        <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+                                            <path d="M8 5v14l11-7z"/>
+                                        </svg>
+                                        თამაში გაგრძელდა!
+                                    </span>
+                                `;
+                                
                                 setTimeout(() => { 
-                                    if(gameFeedbackSpan.innerText === "▶️ თამაში გაგრძელდა!") 
-                                        gameFeedbackSpan.innerText = ""; 
+                                    if(gameFeedbackSpan.innerText.includes("თამაში გაგრძელდა!")) {
+                                        gameFeedbackSpan.innerHTML = ""; 
+                                    }
                                 }, 3000);
                             }
                         }
