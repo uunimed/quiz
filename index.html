@@ -828,87 +828,223 @@ function generateTable(data, columns, isLearnedPopup = false) {
         präpositionen: "https://docs.google.com/spreadsheets/d/e/2PACX-1vQ9inVdkMI1lxmQT54g-dwz-UOFFnoSNnKFKZhS28-SFr99F6p7kYIxkbxg0Q9uXosqiuKCcXIe41pZ/pub?gid=1810482362&single=true&output=csv"
     };
     
-    function parseCSVLine(line) { let res=[], cur='', inQ=false; for(let i=0;i<line.length;i++){let c=line[i]; if(c==='"') inQ=!inQ; else if(c===',' && !inQ){res.push(cur); cur='';} else cur+=c;} res.push(cur); return res; }
-    function cleanNumberPrefix(str) { return str.replace(/^\d+\.\s*/, ''); }
-    
+    // =========================================================
+    // ROBUST CSV PARSER / GOOGLE SHEETS LOADER
+    // =========================================================
+
+    function parseCSV(text) {
+        const rows = [];
+        let row = [], cell = '', inQuotes = false;
+
+        for (let i = 0; i < text.length; i++) {
+            const char = text[i];
+            const next = text[i + 1];
+
+            if (char === '"') {
+                if (inQuotes && next === '"') {
+                    cell += '"';
+                    i++;
+                } else {
+                    inQuotes = !inQuotes;
+                }
+            } else if (char === ',' && !inQuotes) {
+                row.push(cell);
+                cell = '';
+            } else if ((char === '\n' || char === '\r') && !inQuotes) {
+                if (char === '\r' && next === '\n') i++;
+                row.push(cell);
+                cell = '';
+                if (row.some(v => String(v).trim() !== '')) rows.push(row);
+                row = [];
+            } else {
+                cell += char;
+            }
+        }
+
+        row.push(cell);
+        if (row.some(v => String(v).trim() !== '')) rows.push(row);
+        return rows;
+    }
+
+    function parseCSVLine(line) {
+        return parseCSV(String(line))[0] || [];
+    }
+
+    function cleanNumberPrefix(str) {
+        return String(str ?? '')
+            .replace(/^\uFEFF/, '')
+            .replace(/^\s*\d+\.\s*/, '')
+            .trim();
+    }
+
+    function normalizeHeader(str) {
+        return String(str ?? '').replace(/^\uFEFF/, '').trim().toLowerCase();
+    }
+
+    function findColumn(headers, names, fallback = -1) {
+        for (const name of names) {
+            const idx = headers.findIndex(h => normalizeHeader(h).includes(name));
+            if (idx !== -1) return idx;
+        }
+        return fallback;
+    }
+
     async function loadModeData(modeKey) {
         const url = CSV_URLS[modeKey];
-        if(!url) return [];
-        try{
-            const resp = await fetch(url);
-            const text = await resp.text();
-            const rows = text.split(/\r?\n/).filter(r=>r.trim());
-            if(rows.length<2) return [];
-            const headers = rows[0].split(',').map(h=>h.trim().replace(/^"|"$/g,''));
-            let deIdx = headers.findIndex(h=>h.toLowerCase().includes('deutsch')||h==='de');
-            let geIdx = headers.findIndex(h=>h.toLowerCase().includes('georgisch')||h==='ge');
-            if(deIdx===-1) deIdx=0; if(geIdx===-1) geIdx=1;
-            let items = [];
-            for(let i=1;i<rows.length;i++){
-                let cols = parseCSVLine(rows[i]);
-                if(cols.length<=Math.max(deIdx,geIdx)) continue;
-                let deRaw = cols[deIdx] ? cols[deIdx].replace(/^"|"$/g,'').trim() : '';
-                let geRaw = cols[geIdx] ? cols[geIdx].replace(/^"|"$/g,'').trim() : '';
-                if(!deRaw || !geRaw) continue;
-                let de = cleanNumberPrefix(deRaw);
-                let ge = cleanNumberPrefix(geRaw);
-                let extra = {};
-                
-                if(modeKey === 'wörter' && cols.length>=4){
-                    let praet = cols[2] ? cleanNumberPrefix(cols[2]) : '';
-                    let perf = cols[3] ? cleanNumberPrefix(cols[3]) : '';
-                    extra.praet = praet; 
-                    extra.perf = perf;   
-                    if(praet || perf) extra.verbForms = `${praet} | ${perf}`;
-                }
-                else if(modeKey === 'verben' && cols.length>=4){
-                    let prefix = cols[0] || '';
-                    let verb = cols[1] || '';
-                    let mainDef = cols[2] || '';
-                    let georgDef = cols[3] || '';
-                    let fullWord = prefix + verb; 
-                    extra.prefix = prefix;
-                    extra.baseVerb = verb;
-                    extra.mainDef = mainDef;
-                    ge = georgDef;
-                    de = fullWord;
-                }
-                else if(modeKey === 'präpositionen' && cols.length>=4){
-                    let verb = cols[0] || '';
-                    let prep = cols[1] || '';
-                    let kasus = cols[2] || '';
-                    let uebers = cols[3] || '';
-                    extra.prep = prep;
-                    extra.kasus = kasus;
-                    extra.meaning = uebers;
-                    de = `${prep} ${kasus} ${uebers}`;
-                    ge = verb;
-                }
-                
-                items.push({ de, ge, originalIndex: items.length, extra });
+
+        if (!url) {
+            showErrorPopup(`მონაცემების URL ვერ მოიძებნა: ${modeKey}`);
+            return [];
+        }
+
+        try {
+            console.log(`📥 ვტვირთავ ${modeKey}-ის მონაცემებს...`);
+            console.log('CSV URL:', url);
+
+            const resp = await fetch(url, { method: 'GET', cache: 'no-store' });
+
+            console.log('HTTP:', resp.status, resp.statusText);
+
+            if (!resp.ok) {
+                throw new Error(`Google Sheets HTTP ${resp.status} (${resp.statusText})`);
             }
+
+            const text = await resp.text();
+            console.log('CSV პირველი 500 სიმბოლო:', text.slice(0, 500));
+
+            if (!text.trim()) {
+                throw new Error('Google Sheets-მა ცარიელი პასუხი დააბრუნა.');
+            }
+
+            const lower = text.trimStart().toLowerCase();
+            if (lower.startsWith('<!doctype html') || lower.startsWith('<html') || lower.includes('<html')) {
+                throw new Error('Google Sheets CSV-ის ნაცვლად HTML გვერდს აბრუნებს. შეამოწმე Publish to web / CSV URL.');
+            }
+
+            const rows = parseCSV(text);
+            if (rows.length < 2) {
+                throw new Error(`CSV-ში საკმარისი მონაცემები არ არის (${rows.length} რიგი).`);
+            }
+
+            const headers = rows[0].map(h => String(h ?? '').trim());
+            console.log(`📋 ${modeKey} headers:`, headers);
+
+            let deIdx = findColumn(headers, ['deutsch'], -1);
+            if (deIdx === -1) deIdx = findColumn(headers, ['de'], -1);
+
+            let geIdx = findColumn(headers, ['georgisch', 'ქართული'], -1);
+            if (geIdx === -1) geIdx = findColumn(headers, ['ge'], -1);
+
+            if (deIdx === -1) deIdx = 0;
+            if (geIdx === -1) geIdx = 1;
+
+            console.log(`🔎 ${modeKey}: DE=${deIdx}, GE=${geIdx}`);
+
+            const items = [];
+
+            for (let i = 1; i < rows.length; i++) {
+                const cols = rows[i];
+                if (!cols || !cols.length) continue;
+
+                if (modeKey === 'wörter' || modeKey === 'sätze') {
+                    const de = cleanNumberPrefix(cols[deIdx] ?? '');
+                    const ge = cleanNumberPrefix(cols[geIdx] ?? '');
+                    if (!de || !ge) continue;
+
+                    const extra = {};
+                    if (modeKey === 'wörter' && cols.length >= 4) {
+                        extra.praet = cleanNumberPrefix(cols[2] ?? '');
+                        extra.perf = cleanNumberPrefix(cols[3] ?? '');
+                        if (extra.praet || extra.perf) extra.verbForms = `${extra.praet} | ${extra.perf}`;
+                    }
+
+                    items.push({ de, ge, originalIndex: items.length, extra });
+                    continue;
+                }
+
+                if (modeKey === 'verben') {
+                    if (cols.length < 4) continue;
+                    const prefix = cleanNumberPrefix(cols[0] ?? '');
+                    const verb = cleanNumberPrefix(cols[1] ?? '');
+                    const mainDef = cleanNumberPrefix(cols[2] ?? '');
+                    const georgDef = cleanNumberPrefix(cols[3] ?? '');
+                    if (!verb || !georgDef) continue;
+
+                    items.push({
+                        de: `${prefix}${verb}`.trim(),
+                        ge: georgDef,
+                        originalIndex: items.length,
+                        extra: { prefix, baseVerb: verb, mainDef }
+                    });
+                    continue;
+                }
+
+                if (modeKey === 'präpositionen') {
+                    if (cols.length < 4) continue;
+                    const verb = cleanNumberPrefix(cols[0] ?? '');
+                    const prep = cleanNumberPrefix(cols[1] ?? '');
+                    const kasus = cleanNumberPrefix(cols[2] ?? '');
+                    const meaning = cleanNumberPrefix(cols[3] ?? '');
+                    if (!verb || !prep) continue;
+
+                    items.push({
+                        de: `${prep} ${kasus} ${meaning}`.trim(),
+                        ge: verb,
+                        originalIndex: items.length,
+                        extra: { prep, kasus, meaning }
+                    });
+                }
+            }
+
+            console.log(`✅ ${modeKey}: ჩაიტვირთა ${items.length} ჩანაწერი`, items.slice(0, 3));
+
+            if (!items.length) {
+                throw new Error(`${modeKey}-ის CSV ჩაიტვირთა, მაგრამ ვალიდური ჩანაწერი ვერ მოიძებნა.`);
+            }
+
             return items;
-        } catch(e){ showErrorPopup("ჩატვირთვის შეცდომა: "+e.message); return [];}
+        } catch (e) {
+            console.error(`❌ ${modeKey} loading error:`, e);
+            showErrorPopup(`ჩატვირთვის შეცდომა (${modeKey}): ${e.message}`);
+            return [];
+        }
     }
-    
+
 // Firebase Data Loading
     async function loadLearnedFromFirebase(){
         if(!currentUser || !currentMode) return;
-        const snapshot = await db.ref(`users/${currentUser}/learned/${currentMode}`).once('value');
-        const data = snapshot.val() || {};
-        learnedData = data; // ვინახავთ ობიექტს
-        // რადგან ადრე მნიშვნელობად true ინახებოდა, ახლა კი რიცხვი, ამოვიღოთ ყველა key
-        learnedSet = new Set(Object.keys(data).map(Number)); 
+        try {
+            const snapshot = await db.ref(`users/${currentUser}/learned/${currentMode}`).once('value');
+            const data = snapshot.val() || {};
+            learnedData = data;
+            learnedSet = new Set(Object.keys(data).map(Number));
+        } catch (e) {
+            firebaseLearnedAvailable = false;
+            console.warn('Firebase learned-data loading unavailable; continuing without saved learned data:', e);
+            learnedData = {};
+            learnedSet = new Set();
+        }
         updateLearnedUI();
     }
-    
+    let firebaseLearnedAvailable = true;
+
     async function saveLearnedIndex(index, attempts){
-        if(!currentUser || !currentMode) return;
-        // Firebase-ში true-ს ნაცვლად ვინახავთ ცდების ოდენობას
-        await db.ref(`users/${currentUser}/learned/${currentMode}/${index}`).set(attempts);
+        if(!currentUser || !currentMode) return false;
+
+        // Firebase-ში შენახვა არასავალდებულოა: თუ Security Rules კრძალავს წვდომას,
+        // თამაში მაინც გაგრძელდეს და შედეგი მიმდინარე სესიაში ჩაითვალოს.
+        try {
+            await db.ref(`users/${currentUser}/learned/${currentMode}/${index}`).set(attempts);
+            firebaseLearnedAvailable = true;
+        } catch (e) {
+            firebaseLearnedAvailable = false;
+            console.warn('Firebase write unavailable. Learned state is kept locally for this session:', e);
+        }
+
         learnedData[index] = attempts;
         learnedSet.add(index);
         updateLearnedUI();
+        return true;
     }
     
     function updateLearnedUI(){
@@ -1230,7 +1366,11 @@ function showLearnedPopup(){
         clearBtn.onclick = () => {
             showConfirmPopup("ნამდვილად გსურთ ყველა ნასწავლი სიტყვის წაშლა?", async () => {
                 if(currentUser && currentMode) {
-                    await db.ref(`users/${currentUser}/learned/${currentMode}`).remove();
+                    try {
+                        await db.ref(`users/${currentUser}/learned/${currentMode}`).remove();
+                    } catch (e) {
+                        console.warn('Firebase clear unavailable:', e);
+                    }
                 }
                 learnedSet.clear();
                 learnedData = {}; 
@@ -1248,7 +1388,11 @@ function showLearnedPopup(){
             
             showConfirmPopup("ნამდვილად გსურთ ამ სიტყვის ნასწავლიდან ამოშლა?", async () => {
                 if(currentUser && currentMode) {
-                    await db.ref(`users/${currentUser}/learned/${currentMode}/${itemIndex}`).remove();
+                    try {
+                        await db.ref(`users/${currentUser}/learned/${currentMode}/${itemIndex}`).remove();
+                    } catch (e) {
+                        console.warn('Firebase delete unavailable:', e);
+                    }
                 }
                 learnedSet.delete(itemIndex);
                 delete learnedData[itemIndex]; 
@@ -1526,11 +1670,30 @@ function updateTimerUI(){
             document.getElementById('modeActionArea').classList.add('hidden');
             document.getElementById('modeLoadingSpinner').classList.remove('hidden');
             
-            rawDataset = await loadModeData(mode);
-            await loadLearnedFromFirebase();
-            
+            rawDataset = [];
+            learnedData = {};
+            learnedSet = new Set();
+
+            try {
+                rawDataset = await loadModeData(mode);
+                await loadLearnedFromFirebase();
+            } catch (e) {
+                console.error('Mode loading error:', e);
+            }
+
             document.getElementById('modeLoadingSpinner').classList.add('hidden');
             document.getElementById('modeActionArea').classList.remove('hidden');
+
+            // Firebase-ის permission_denied შეცდომა არ უნდა ბლოკავდეს აპს.
+            // თუ წაკითხვა/ჩაწერა აკრძალულია, მხოლოდ სესიის ფარგლებში იმუშავებს ნასწავლი სიტყვების სტატუსი.
+            let firebaseNotice = document.getElementById('firebaseNotice');
+            if (!firebaseNotice) {
+                firebaseNotice = document.createElement('div');
+                firebaseNotice.id = 'firebaseNotice';
+                firebaseNotice.style.cssText = 'margin-top:12px; text-align:center; font-size:0.82rem; color:#b45309;';
+                document.getElementById('modeActionArea').after(firebaseNotice);
+            }
+            firebaseNotice.textContent = firebaseLearnedAvailable ? '' : '⚠️ ნასწავლი სიტყვების Firebase-ში შენახვა ამჟამად მიუწვდომელია; თამაში ჩვეულებრივ მუშაობს.';
             
             showAllBtn.onclick = ()=>showAllWordsPopup();
             showLearnedBtn.onclick = ()=>showLearnedPopup();
