@@ -464,6 +464,23 @@
     display: none;
 }
 
+.game-title-divider {
+    display: inline-block;
+    width: 2px;
+    height: 22px;
+    background-color: #cbd5e1;
+    margin: 0 12px;
+    vertical-align: middle;
+}
+.game-title-badge {
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-weight: bold;
+    color: white;
+    font-size: 0.95rem;
+    display: inline-block;
+}
+
     </style>
 </head>
 <body>
@@ -581,6 +598,13 @@
         </div>
     </div>
 
+    <!-- CONTENT SELECTION -->
+    <div id="selectionScreen" class="screen hidden">
+        <h2 id="selectionTitle" style="margin-bottom:24px;text-align:center;">აირჩიე ნაწილი</h2>
+        <div id="selectionOptions" class="modes-grid" style="display:flex;justify-content:center;gap:16px;flex-wrap:wrap;"></div>
+        <div style="text-align:center;margin-top:24px;"><button id="cancelSelectionBtn" class="back-btn">უკან</button></div>
+    </div>
+
     <!-- GAME -->
     <div id="gameScreen" class="screen hidden">
         <div style="display:flex; justify-content:space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
@@ -649,6 +673,8 @@ let faceLostTimerGlobal = null;
     let gameItems = [];
     let currentGameIndex = 0;
     let gameDirection = null;
+    let selectedSubset = 'all';
+    let selectionBypass = false;
     let timerInterval = null;
     let timeLeft = 10;
     let phase = "thinking"; 
@@ -659,6 +685,10 @@ let faceLostTimerGlobal = null;
     const loginScreen = document.getElementById('loginScreen');
     const modeScreen = document.getElementById('modeScreen');
     const directionScreen = document.getElementById('directionScreen');
+    const selectionScreen = document.getElementById('selectionScreen');
+    const selectionTitle = document.getElementById('selectionTitle');
+    const selectionOptions = document.getElementById('selectionOptions');
+    const cancelSelectionBtn = document.getElementById('cancelSelectionBtn');
     const gameScreen = document.getElementById('gameScreen');
     const usernameInput = document.getElementById('usernameInput');
     const passwordInput = document.getElementById('passwordInput');
@@ -762,63 +792,87 @@ preloadModels();
     }
     
 function generateTable(data, columns, isLearnedPopup = false) {
-        if(!data.length) return '<p>მონაცემები ვერ მოიძებნა</p>';
-        let html = `<table class="data-table"><thead><tr>`;
-        
-        // სათაურების დახატვა
+    if(!data.length) return '<p>მონაცემები ვერ მოიძებნა</p>';
+    let html = `<table class="data-table"><thead><tr>`;
+    
+    // სათაურების დახატვა
+    columns.forEach(col => {
+        if (col === 'N') {
+            html += `<th style="width: 40px; text-align: center;">${col}</th>`;
+        } else {
+            html += `<th>${col}</th>`;
+        }
+    });
+    
+    html += `</tr></thead><tbody>`;
+    for(let row of data){
+        html += `<tr>`;
         columns.forEach(col => {
+            // ნუმერაციის ველის დახატვა
             if (col === 'N') {
-                html += `<th style="width: 40px; text-align: center;">${col}</th>`;
+                html += `<td style="text-align: center; font-weight: bold; color: #64748b;">${row[col]}</td>`;
+            } 
+            // დონის ფერადი უჯრა
+            else if (col === 'დონე') {
+                let lvl = (row[col] || '').trim().toUpperCase();
+                let bgCol = '#94a3b8'; // ნაცრისფერი დეფოლტად
+                if (lvl === 'A1') bgCol = '#3b82f6';      // ლურჯი
+                else if (lvl === 'A2') bgCol = '#10b981'; // მწვანე
+                else if (lvl === 'B1') bgCol = '#f59e0b'; // ყვითელი/სტაფილოსფერი
+                else if (lvl === 'B2') bgCol = '#8b5cf6'; // იისფერი
+
+                html += `<td style="text-align: center;">
+                    <div style="background: ${bgCol}; color: white; padding: 4px 8px; border-radius: 6px; font-weight: bold; font-size: 0.85rem; display: inline-block; min-width: 36px;">
+                        ${lvl || '-'}
+                    </div>
+                </td>`;
+            }
+            // კაპიტელების უჯრაში ჩასმა (ბეჯი)
+            else if (col === 'Kap.') {
+                let kap = (row[col] || '').trim();
+                html += `<td style="text-align: center;">
+                    <div style="background: #475569; color: white; padding: 4px 8px; border-radius: 6px; font-weight: bold; font-size: 0.85rem; display: inline-block; white-space: nowrap;">
+                        ${kap || '-'}
+                    </div>
+                </td>`;
+            }
+            else if (col === 'მოქმედება' && isLearnedPopup) {
+                // ინდივიდუალური წაშლის ღილაკი SVG აიკონით
+                html += `<td style="text-align: center;">
+                    <button class="remove-single-btn" data-index="${row._originalIndex}" title="წაშლა" style="background: #ef4444; color: white; border: none; padding: 8px; border-radius: 8px; cursor: pointer; transition: 0.2s; display: inline-flex; align-items: center; justify-content: center;">
+                        <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+                            <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
+                        </svg>
+                    </button>
+                </td>`;
+            } else if (col === 'ცდა' && isLearnedPopup) {
+                let attempts = learnedData[row._originalIndex];
+                if (typeof attempts !== 'number') attempts = 1;
+
+                let bgCol = '#10b981'; // 1: მწვანე
+                if (attempts === 2 || attempts === 3) bgCol = '#f97316'; // 2-3: სტაფილოსფერი
+                else if (attempts >= 4 && attempts <= 6) bgCol = '#334155'; // 4-6: მუქი ნაცრისფერი/ლურჯი
+                else if (attempts >= 7) bgCol = '#7f1d1d'; // 7+: მუქი წითელი
+
+                html += `<td style="text-align: center;">
+                    <div style="background: ${bgCol}; color: white; padding: 4px 0; width: 32px; border-radius: 8px; text-align: center; font-weight: bold; font-size: 0.9rem; margin: auto;">
+                        ${attempts}
+                    </div>
+                </td>`;
             } else {
-                html += `<th>${col}</th>`;
+                let cellData = row[col] || '';
+                if (typeof cellData === 'string' && cellData.includes('<')) {
+                    html += `<td>${cellData}</td>`;
+                } else {
+                    html += `<td>${escapeHtml(String(cellData))}</td>`;
+                }
             }
         });
-        
-        html += `</tr></thead><tbody>`;
-        for(let row of data){
-            html += `<tr>`;
-            columns.forEach(col => {
-                // ნუმერაციის ველის დახატვა
-                if (col === 'N') {
-                    html += `<td style="text-align: center; font-weight: bold; color: #64748b;">${row[col]}</td>`;
-                } 
-                else if (col === 'მოქმედება' && isLearnedPopup) {
-                    // ინდივიდუალური წაშლის ღილაკი SVG აიკონით
-                    html += `<td style="text-align: center;">
-                        <button class="remove-single-btn" data-index="${row._originalIndex}" title="წაშლა" style="background: #ef4444; color: white; border: none; padding: 8px; border-radius: 8px; cursor: pointer; transition: 0.2s; display: inline-flex; align-items: center; justify-content: center;">
-                            <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
-                                <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
-                            </svg>
-                        </button>
-                    </td>`;
-                } else if (col === 'ცდა' && isLearnedPopup) {
-                    let attempts = learnedData[row._originalIndex];
-                    if (typeof attempts !== 'number') attempts = 1;
-
-                    let bgCol = '#10b981'; // 1: მწვანე
-                    if (attempts === 2 || attempts === 3) bgCol = '#f97316'; // 2-3: სტაფილოსფერი
-                    else if (attempts >= 4 && attempts <= 6) bgCol = '#334155'; // 4-6: მუქი ნაცრისფერი/ლურჯი
-                    else if (attempts >= 7) bgCol = '#7f1d1d'; // 7+: მუქი წითელი
-
-                    html += `<td style="text-align: center;">
-                        <div style="background: ${bgCol}; color: white; padding: 4px 0; width: 32px; border-radius: 8px; text-align: center; font-weight: bold; font-size: 0.9rem; margin: auto;">
-                            ${attempts}
-                        </div>
-                    </td>`;
-                } else {
-                    let cellData = row[col] || '';
-                    if (typeof cellData === 'string' && cellData.includes('<')) {
-                        html += `<td>${cellData}</td>`;
-                    } else {
-                        html += `<td>${escapeHtml(String(cellData))}</td>`;
-                    }
-                }
-            });
-            html += `</tr>`;
-        }
-        html += `</tbody></table>`;
-        return html;
+        html += `</tr>`;
     }
+    html += `</tbody></table>`;
+    return html;
+}
     function escapeHtml(str) { if(!str) return ''; return str.replace(/[&<>]/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;'})[m]); }
     
     const CSV_URLS = {
@@ -889,126 +943,226 @@ function generateTable(data, columns, isLearnedPopup = false) {
         return fallback;
     }
 
-    async function loadModeData(modeKey) {
-        const url = CSV_URLS[modeKey];
-
-        if (!url) {
-            showErrorPopup(`მონაცემების URL ვერ მოიძებნა: ${modeKey}`);
-            return [];
-        }
-
-        try {
-            console.log(`📥 ვტვირთავ ${modeKey}-ის მონაცემებს...`);
-            console.log('CSV URL:', url);
-
-            const resp = await fetch(url, { method: 'GET', cache: 'no-store' });
-
-            console.log('HTTP:', resp.status, resp.statusText);
-
-            if (!resp.ok) {
-                throw new Error(`Google Sheets HTTP ${resp.status} (${resp.statusText})`);
-            }
-
-            const text = await resp.text();
-            console.log('CSV პირველი 500 სიმბოლო:', text.slice(0, 500));
-
-            if (!text.trim()) {
-                throw new Error('Google Sheets-მა ცარიელი პასუხი დააბრუნა.');
-            }
-
-            const lower = text.trimStart().toLowerCase();
-            if (lower.startsWith('<!doctype html') || lower.startsWith('<html') || lower.includes('<html')) {
-                throw new Error('Google Sheets CSV-ის ნაცვლად HTML გვერდს აბრუნებს. შეამოწმე Publish to web / CSV URL.');
-            }
-
-            const rows = parseCSV(text);
-            if (rows.length < 2) {
-                throw new Error(`CSV-ში საკმარისი მონაცემები არ არის (${rows.length} რიგი).`);
-            }
-
-            const headers = rows[0].map(h => String(h ?? '').trim());
-            console.log(`📋 ${modeKey} headers:`, headers);
-
-            let deIdx = findColumn(headers, ['deutsch'], -1);
-            if (deIdx === -1) deIdx = findColumn(headers, ['de'], -1);
-
-            let geIdx = findColumn(headers, ['georgisch', 'ქართული'], -1);
-            if (geIdx === -1) geIdx = findColumn(headers, ['ge'], -1);
-
-            if (deIdx === -1) deIdx = 0;
-            if (geIdx === -1) geIdx = 1;
-
-            console.log(`🔎 ${modeKey}: DE=${deIdx}, GE=${geIdx}`);
-
-            const items = [];
-
-            for (let i = 1; i < rows.length; i++) {
-                const cols = rows[i];
-                if (!cols || !cols.length) continue;
-
-                if (modeKey === 'wörter' || modeKey === 'sätze') {
-                    const de = cleanNumberPrefix(cols[deIdx] ?? '');
-                    const ge = cleanNumberPrefix(cols[geIdx] ?? '');
-                    if (!de || !ge) continue;
-
-                    const extra = {};
-                    if (modeKey === 'wörter' && cols.length >= 4) {
-                        extra.praet = cleanNumberPrefix(cols[2] ?? '');
-                        extra.perf = cleanNumberPrefix(cols[3] ?? '');
-                        if (extra.praet || extra.perf) extra.verbForms = `${extra.praet} | ${extra.perf}`;
-                    }
-
-                    items.push({ de, ge, originalIndex: items.length, extra });
-                    continue;
-                }
-
-                if (modeKey === 'verben') {
-                    if (cols.length < 4) continue;
-                    const prefix = cleanNumberPrefix(cols[0] ?? '');
-                    const verb = cleanNumberPrefix(cols[1] ?? '');
-                    const mainDef = cleanNumberPrefix(cols[2] ?? '');
-                    const georgDef = cleanNumberPrefix(cols[3] ?? '');
-                    if (!verb || !georgDef) continue;
-
-                    items.push({
-                        de: `${prefix}${verb}`.trim(),
-                        ge: georgDef,
-                        originalIndex: items.length,
-                        extra: { prefix, baseVerb: verb, mainDef }
-                    });
-                    continue;
-                }
-
-                if (modeKey === 'präpositionen') {
-                    if (cols.length < 4) continue;
-                    const verb = cleanNumberPrefix(cols[0] ?? '');
-                    const prep = cleanNumberPrefix(cols[1] ?? '');
-                    const kasus = cleanNumberPrefix(cols[2] ?? '');
-                    const meaning = cleanNumberPrefix(cols[3] ?? '');
-                    if (!verb || !prep) continue;
-
-                    items.push({
-                        de: `${prep} ${kasus} ${meaning}`.trim(),
-                        ge: verb,
-                        originalIndex: items.length,
-                        extra: { prep, kasus, meaning }
-                    });
-                }
-            }
-
-            console.log(`✅ ${modeKey}: ჩაიტვირთა ${items.length} ჩანაწერი`, items.slice(0, 3));
-
-            if (!items.length) {
-                throw new Error(`${modeKey}-ის CSV ჩაიტვირთა, მაგრამ ვალიდური ჩანაწერი ვერ მოიძებნა.`);
-            }
-
-            return items;
-        } catch (e) {
-            console.error(`❌ ${modeKey} loading error:`, e);
-            showErrorPopup(`ჩატვირთვის შეცდომა (${modeKey}): ${e.message}`);
-            return [];
-        }
+    
+    // --- დამატებითი არჩევანი: დონე / Präposition ---
+    function normalizeLevel(value) {
+        const v = String(value ?? '').trim().toUpperCase().replace(/\s+/g, '');
+        if (v.includes('A1')) return 'A1';
+        if (v.includes('A2')) return 'A2';
+        if (v.includes('B1')) return 'B1';
+        if (v.includes('B2')) return 'B2';
+        return '';
     }
+
+    function normalizePrep(value) {
+        return String(value ?? '').trim().toUpperCase().replace(/\s+/g, '');
+    }
+
+    function detectLevelFromRow(cols, headers) {
+        const levelIdx = headers.findIndex(h => {
+            const x = normalizeHeader(h);
+            return x.includes('level') || x.includes('niveau') || x.includes('stufe') || x.includes('დონე');
+        });
+        if (levelIdx >= 0) {
+            const level = normalizeLevel(cols[levelIdx]);
+            if (level) return level;
+        }
+        for (const value of cols) {
+            const level = normalizeLevel(value);
+            if (level) return level;
+        }
+        return '';
+    }
+
+    function detectChapterFromRow(cols, headers) {
+        const idx = headers.findIndex(h => {
+            const x = normalizeHeader(h);
+            return x.includes('kapitel') || x === 'kap' || x.includes('chapter') || x.includes('თავი');
+        });
+        if (idx >= 0 && String(cols[idx] ?? '').trim()) return String(cols[idx]).trim();
+        return '';
+    }
+
+    function getDatasetPrepositions(dataset = rawDataset) {
+        return [...new Map(dataset.map(item => {
+            const p = String(item?.extra?.prep ?? '').trim();
+            return [normalizePrep(p), p];
+        }).filter(([k,p]) => k && p)).values()].sort((a,b) => a.localeCompare(b,'de'));
+    }
+
+    function filterDatasetBySelection(dataset, selection) {
+        if (!selection || selection === 'all') return [...dataset];
+        if (['A1','A2','B1','B2'].includes(selection))
+            return dataset.filter(item => normalizeLevel(item?.extra?.level) === selection);
+        if (selection.startsWith('prep:')) {
+            const wanted = selection.slice(5);
+            return dataset.filter(item => normalizePrep(item?.extra?.prep) === wanted);
+        }
+        return [...dataset];
+    }
+
+    function makeSelectionCard(label, value, color, count) {
+        const b = document.createElement('button');
+        b.className = 'mode-card';
+        b.dataset.selection = value;
+        b.style.cssText = 'background:#fff;padding:24px 16px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;font-size:1.05rem;font-weight:600;flex:1;min-width:180px;';
+        b.innerHTML = `<span class="svg-icon" style="color:${color};"><svg viewBox="0 0 24 24" width="30" height="30" fill="currentColor"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-7 14H7v-2h5v2zm5-4H7v-2h10v2zm0-4H7V7h10v2z"/></svg></span><span>${escapeHtml(label)}</span><span style="font-size:.82rem;color:#64748b;">ჩანაწერი: ${count}</span>`;
+        if (count === 0) { b.disabled = true; b.style.opacity = '.45'; b.style.cursor = 'not-allowed'; }
+        return b;
+    }
+function openSelectionScreen() {
+        selectionOptions.innerHTML = '';
+
+        if (currentMode === 'wörter' || currentMode === 'sätze') {
+            selectionTitle.innerText = currentMode === 'wörter' ? 'აირჩიე სიტყვების დონე' : 'აირჩიე წინადადებების დონე';
+            const colors = {A1:'#4a90e2',A2:'#10b981',B1:'#d97706',B2:'#8b5cf6'};
+            
+            ['A1','A2','B1','B2'].forEach(level => {
+                // ვფილტრავთ ამ დონის ელემენტებს
+                const levelItems = rawDataset.filter(item => normalizeLevel(item?.extra?.level) === level);
+                // ვთვლით მხოლოდ იმ რაოდენობას, რომელიც ჯერ არ არის ნასწავლი (learnedSet-ში არ არის)
+                const remainingCount = levelItems.filter(item => !learnedSet.has(item.originalIndex)).length;
+                
+                selectionOptions.appendChild(makeSelectionCard(`დონე: ${level}`, level, colors[level], remainingCount));
+            });
+            
+            // "ყველა დონე ერთდროულად"-სთვისაც ჯამურად დარჩენილების რაოდენობა
+            const totalRemaining = rawDataset.filter(item => !learnedSet.has(item.originalIndex)).length;
+            selectionOptions.appendChild(makeSelectionCard('ყველა დონე ერთდროულად', 'all', '#334155', totalRemaining));
+            
+        } else if (currentMode === 'präpositionen') {
+            selectionTitle.innerText = 'აირჩიე Präposition';
+            getDatasetPrepositions().forEach(prep => {
+                const prepItems = rawDataset.filter(item => normalizePrep(item?.extra?.prep) === normalizePrep(prep));
+                const remainingCount = prepItems.filter(item => !learnedSet.has(item.originalIndex)).length;
+                
+                selectionOptions.appendChild(makeSelectionCard(prep, `prep:${normalizePrep(prep)}`, '#8b5cf6', remainingCount));
+            });
+            const totalRemaining = rawDataset.filter(item => !learnedSet.has(item.originalIndex)).length;
+            selectionOptions.appendChild(makeSelectionCard('ყველა Präposition', 'all', '#334155', totalRemaining));
+        }
+
+        directionScreen.classList.add('hidden');
+        selectionScreen.classList.remove('hidden');
+    }
+
+async function loadModeData(modeKey) {
+    const url = CSV_URLS[modeKey];
+
+    if (!url) {
+        showErrorPopup(`მონაცემების URL ვერ მოიძებნა: ${modeKey}`);
+        return [];
+    }
+
+    try {
+        const resp = await fetch(url, { method: 'GET', cache: 'no-store' });
+        if (!resp.ok) throw new Error(`Google Sheets HTTP ${resp.status}`);
+        const text = await resp.text();
+        if (!text.trim()) throw new Error('Google Sheets-მა ცარიელი პასუხი დააბრუნა.');
+
+        const rows = parseCSV(text);
+        if (rows.length === 0) throw new Error('CSV ფაილი ცარიელია.');
+
+        const items = [];
+        let currentLevel = '';
+        let currentChapter = '';
+
+        function parseLevelText(str) {
+            const s = String(str || '').toUpperCase();
+            if (s.includes('A1')) return 'A1';
+            if (s.includes('A2')) return 'A2';
+            if (s.includes('B1')) return 'B1';
+            if (s.includes('B2')) return 'B2';
+            return '';
+        }
+
+        // i = 1 იწყება იმისათვის, რომ პირველი ხაზი (Header) გამოტოვებულ იქნას
+        for (let i = 1; i < rows.length; i++) {
+            const cols = rows[i];
+            if (!cols || !cols.length) continue;
+
+            const col0 = String(cols[0] ?? '').trim();
+            const col1 = String(cols[1] ?? '').trim();
+            const fullRowText = cols.join(' ').toUpperCase();
+            const col0Upper = col0.toUpperCase();
+
+            // 1. დონის ამოცნობა
+            if (fullRowText.includes('NIVEAU') || col0Upper.includes('NIVEAU') || col1.toUpperCase().includes('NIVEAU')) {
+                const detected = parseLevelText(fullRowText);
+                if (detected) {
+                    currentLevel = detected;
+                    currentChapter = ''; 
+                    continue; 
+                }
+            }
+
+            // 2. თავის (KAP) მკაცრი ამოცნობა (იწყება ზუსტად KAP-ით ან KAPITEL-ით)
+            if (modeKey === 'sätze' && (col0Upper.startsWith('KAP') || col0Upper.startsWith('KAPITEL'))) {
+                currentChapter = col0;
+                continue; 
+            }
+
+            // 3. მონაცემების დამუშავება
+            if (modeKey === 'wörter' || modeKey === 'sätze') {
+                const de = cleanNumberPrefix(cols[0] ?? '');
+                const ge = cleanNumberPrefix(cols[1] ?? '');
+                if (!de || !ge) continue; 
+
+                const extra = {};
+                if (modeKey === 'wörter' && cols.length >= 3) {
+                    extra.praet = cleanNumberPrefix(cols[1] ?? '');
+                    extra.perf = cleanNumberPrefix(cols[2] ?? '');
+                }
+
+                extra.level = currentLevel;
+                extra.chapter = currentChapter;
+
+                items.push({ 
+                    de: modeKey === 'wörter' ? cleanNumberPrefix(cols[0] ?? '') : de, 
+                    ge: modeKey === 'wörter' ? cleanNumberPrefix(cols[1] ?? '') : ge, 
+                    originalIndex: items.length, 
+                    extra 
+                });
+            }
+            else if (modeKey === 'verben') {
+                if (cols.length < 4) continue;
+                const prefix = cleanNumberPrefix(cols[0] ?? '');
+                const verb = cleanNumberPrefix(cols[1] ?? '');
+                const mainDef = cleanNumberPrefix(cols[2] ?? '');
+                const georgDef = cleanNumberPrefix(cols[3] ?? '');
+                if (!verb || !georgDef) continue;
+
+                items.push({
+                    de: `${prefix}${verb}`.trim(),
+                    ge: georgDef,
+                    originalIndex: items.length,
+                    extra: { prefix, baseVerb: verb, mainDef }
+                });
+            }
+            else if (modeKey === 'präpositionen') {
+                if (cols.length < 4) continue;
+                const verb = cleanNumberPrefix(cols[0] ?? '');
+                const prep = cleanNumberPrefix(cols[1] ?? '');
+                const kasus = cleanNumberPrefix(cols[2] ?? '');
+                const meaning = cleanNumberPrefix(cols[3] ?? '');
+                if (!verb || !prep) continue;
+
+                items.push({
+                    de: `${prep} ${kasus} ${meaning}`.trim(),
+                    ge: verb,
+                    originalIndex: items.length,
+                    extra: { prep, kasus, meaning, prepKey: normalizePrep(prep) }
+                });
+            }
+        }
+
+        return items;
+    } catch (e) {
+        console.error(`❌ ${modeKey} loading error:`, e);
+        showErrorPopup(`ჩატვირთვის შეცდომა (${modeKey}): ${e.message}`);
+        return [];
+    }
+}
 
 // Firebase Data Loading
     async function loadLearnedFromFirebase(){
@@ -1271,59 +1425,76 @@ function startResumeCountdownFunc() {
     }
 
 function getTableHTML(dataset, isLearnedPopup = false) {
-        let columns, tableRows;
-        
-        if (currentMode === 'wörter') {
-            columns = ['N', 'Deutsch', 'Präteritum (3. Person)', 'Perfekt (er/sie)', 'Georgisch'];
-            tableRows = dataset.map((item, index) => ({
-                'N': index + 1,
-                'Deutsch': item.de,
-                'Präteritum (3. Person)': item.extra.praet || '',
-                'Perfekt (er/sie)': item.extra.perf || '',
-                'Georgisch': item.ge,
-                '_originalIndex': item.originalIndex
-            }));
-        } 
-        else if (currentMode === 'verben') {
-            columns = ['N', 'Präfix', 'Verb', 'Hauptdefinition', 'Georgische Übersetzung'];
-            tableRows = dataset.map((item, index) => ({
-                'N': index + 1,
-                'Präfix': item.extra.prefix || '',
-                'Verb': item.extra.baseVerb || '',
-                'Hauptdefinition': item.extra.mainDef || '',
-                'Georgische Übersetzung': item.ge,
-                '_originalIndex': item.originalIndex
-            }));
-        } 
-        else if (currentMode === 'präpositionen') {
-            columns = ['N', 'das Verb', 'Präposition', 'Kasus', 'Übersetzung'];
-            tableRows = dataset.map((item, index) => ({
-                'N': index + 1,
-                'das Verb': item.ge,
-                'Präposition': item.extra.prep || '',
-                'Kasus': item.extra.kasus || '',
-                'Übersetzung': item.extra.meaning || '',
-                '_originalIndex': item.originalIndex
-            }));
-        }
-        else {
-            columns = ['N', 'Deutsch', 'Georgisch'];
-            tableRows = dataset.map((item, index) => ({
-                'N': index + 1,
-                'Deutsch': formatDisplayWord(item),
-                'Georgisch': item.ge,
-                '_originalIndex': item.originalIndex
-            }));
-        }
-
-        // მხოლოდ ნასწავლი სიტყვების ფანჯარაში ვამატებთ მოქმედების სვეტს
-        if (isLearnedPopup) {
-            columns.push('ცდა'); 
-            columns.push('მოქმედება');
-        }
-        
-        return generateTable(tableRows, columns, isLearnedPopup);
+    let columns, tableRows;
+    
+    if (currentMode === 'wörter') {
+        columns = ['N', 'დონე', 'Deutsch', 'Präteritum (3. Person)', 'Perfekt (er/sie)', 'Georgisch'];
+        tableRows = dataset.map((item, index) => ({
+            'N': index + 1,
+            'დონე': item.extra.level || '',
+            'Deutsch': item.de,
+            'Präteritum (3. Person)': item.extra.praet || '',
+            'Perfekt (er/sie)': item.extra.perf || '',
+            'Georgisch': item.ge,
+            '_originalIndex': item.originalIndex,
+            '_level': item.extra.level || '' // ფერადი უჯრისთვის
+        }));
+    } 
+    else if (currentMode === 'sätze') {
+        columns = ['N', 'დონე', 'Kap.', 'Deutsch', 'Georgisch'];
+        tableRows = dataset.map((item, index) => ({
+            'N': index + 1,
+            'დონე': item.extra.level || '',
+            'Kap.': item.extra.chapter || '',
+            'Deutsch': item.de,
+            'Georgisch': item.ge,
+            '_originalIndex': item.originalIndex,
+            '_level': item.extra.level || '' // ფერადი უჯრისთვის
+        }));
     }
+    else if (currentMode === 'verben') {
+        columns = ['N', 'Präfix', 'Verb', 'Hauptdefinition', 'Georgische Übersetzung'];
+        tableRows = dataset.map((item, index) => ({
+            'N': index + 1,
+            'Präfix': item.extra.prefix || '',
+            'Verb': item.extra.baseVerb || '',
+            'Hauptdefinition': item.extra.mainDef || '',
+            'Georgische Übersetzung': item.ge,
+            '_originalIndex': item.originalIndex
+        }));
+    } 
+    else if (currentMode === 'präpositionen') {
+        columns = ['N', 'das Verb', 'Präposition', 'Kasus', 'Übersetzung'];
+        tableRows = dataset.map((item, index) => ({
+            'N': index + 1,
+            'das Verb': item.ge,
+            'Präposition': item.extra.prep || '',
+            'Kasus': item.extra.kasus || '',
+            'Übersetzung': item.extra.meaning || '',
+            '_originalIndex': item.originalIndex
+        }));
+    }
+    else {
+        columns = ['N', 'Deutsch', 'Georgisch'];
+        tableRows = dataset.map((item, index) => ({
+            'N': index + 1,
+            'Deutsch': formatDisplayWord(item),
+            'Georgisch': item.ge,
+            '_originalIndex': item.originalIndex
+        }));
+    }
+
+    // თუ ეს არის ნასწავლი სიტყვების ფანჯარა, ვამატებთ დონეს (თუ სჭირდება), ცდას და მოქმედებას
+    if (isLearnedPopup) {
+        if (currentMode === 'wörter' || currentMode === 'sätze') {
+            // დონე უკვე ჩამატებულია თავში, სვეტების მიმდევრობას ვასწორებთ
+        }
+        columns.push('ცდა'); 
+        columns.push('მოქმედება');
+    }
+    
+    return generateTable(tableRows, columns, isLearnedPopup);
+}
 
 function showAllWordsPopup(){
     if(!rawDataset.length){ showErrorPopup("მონაცემები ვერ მოიძებნა"); return; }
@@ -1437,32 +1608,81 @@ function showRemainingWordsPopup() {
     };
 }
 
-async function startGameWithDirection(direction){
-if(!rawDataset.length){ showErrorPopup("მონაცემები არ არის"); return false; }
+async function startGameWithDirection(direction, subset = selectedSubset){
+    if(!rawDataset.length){ showErrorPopup("მონაცემები არ არის"); return false; }
     gameDirection = direction;
-        
-        // ფილტრაცია: ამოვიღოთ სიტყვები, რომლებიც უკვე ნასწავლი გვაქვს (learnedSet-შია)
-        gameItems = [...rawDataset]
-            .map((item,idx) => ({ ...item, originalIndex: idx }))
-            .filter(item => !learnedSet.has(item.originalIndex));
-            
-        // თუ აღმოჩნდა, რომ ყველა სიტყვა ნასწავლია
-        if(gameItems.length === 0){
-            showErrorPopup("ყველა სიტყვა ნასწავლია, რის გამოც თამაში ვერ გაგრძელდება.");
-            return false;
-        }
+    selectedSubset = subset || 'all';
 
-        // ამოურევთ მხოლოდ დარჩენილ (სწავლების პროცესში მყოფ) სიტყვებს
-        for(let i=gameItems.length-1;i>0;i--){ 
-            let j=Math.floor(Math.random()*(i+1)); 
-            [gameItems[i],gameItems[j]]=[gameItems[j],gameItems[i]]; 
-        }
-        
-currentGameIndex = 0;
+    // ყოველთვის თავიდან ვანიჭებთ ინდექსს rawDataset-ის რეალური პოზიციის მიხედვით.
+    // ეს მნიშვნელოვანია, რადგან Firebase-ში ნასწავლი სიტყვები სწორედ ამ ინდექსებით ინახება.
+    const indexedDataset = rawDataset.map((item, idx) => ({
+        ...item,
+        originalIndex: idx
+    }));
+
+    const selectedDataset = filterDatasetBySelection(indexedDataset, selectedSubset);
+    if (!selectedDataset.length) {
+        showErrorPopup("ამ არჩევანში შესაბამისი ჩანაწერები ვერ მოიძებნა.");
+        return false;
+    }
+
+    // ნასწავლი სიტყვების გამორიცხვა ხდება მხოლოდ არჩეული დონის/Präposition-ის
+    // რეალურ rawDataset ინდექსებზე.
+    gameItems = selectedDataset.filter(item => {
+        const idx = Number(item.originalIndex);
+        return !learnedSet.has(idx);
+    });
+            
+    // თუ აღმოჩნდა, რომ ყველა სიტყვა ნასწავლია
+    if(gameItems.length === 0){
+        showErrorPopup("ყველა სიტყვა ნასწავლია, რის გამოც თამაში ვერ გაგრძელდება.");
+        return false;
+    }
+
+    // ამოურევთ მხოლოდ დარჩენილ (სწავლების პროცესში მყოფ) სიტყვებს
+    for(let i=gameItems.length-1;i>0;i--){ 
+        let j=Math.floor(Math.random()*(i+1)); 
+        [gameItems[i],gameItems[j]]=[gameItems[j],gameItems[i]]; 
+    }
+    
+    currentGameIndex = 0;
     activeGame = true;
     attemptsTracker = {};
     correctAnswered = false;
     if(timerInterval) clearInterval(timerInterval);
+
+    // --- სათაურის დიზაინი მოთხოვნის მიხედვით ---
+    let modeName = {wörter:'Wörter', sätze:'Sätze', verben:'Trennbare Verben', präpositionen:'Präpositionen'}[currentMode];
+    
+    let subInfo = '';
+    let badgeColor = '#475569'; // დეფოლტ ფერი
+
+    if (selectedSubset === 'all') {
+        subInfo = currentMode === 'präpositionen' ? 'ყველა Präposition' : 'ყველა სიტყვა';
+        badgeColor = '#334155';
+    } else if (['A1','A2','B1','B2'].includes(selectedSubset)) {
+        subInfo = `დონე: ${selectedSubset}`;
+        if (selectedSubset === 'A1') badgeColor = '#3b82f6';
+        else if (selectedSubset === 'A2') badgeColor = '#10b981';
+        else if (selectedSubset === 'B1') badgeColor = '#f59e0b';
+        else if (selectedSubset === 'B2') badgeColor = '#8b5cf6';
+    } else if (selectedSubset.startsWith('prep:')) {
+        subInfo = selectedSubset.slice(5);
+        badgeColor = '#8b5cf6';
+    } else {
+        subInfo = selectedSubset;
+        badgeColor = '#4a90e2';
+    }
+
+    // უფრო დიდი ზომის ვერტიკალური ხაზი CSS კლასით
+    let divider = `<span class="game-title-divider"></span>`;
+    
+    // დონის/არჩევანის უჯრა შესაბამისი ფერით
+    let subBadge = `<span class="game-title-badge" style="background: ${badgeColor};">${subInfo}</span>`;
+
+    gameModeTitleSpan.innerHTML = `მოდული: ${modeName} ${divider} ${subBadge}`;
+    // -----------------------------------------------------------
+
     renderNextCard();
     
     return true;
@@ -1664,7 +1884,7 @@ function updateTimerUI(){
 
             let mode = card.getAttribute('data-mode');
             currentMode = mode;
-            let modeName = {wörter:'Wörter', sätze:'Sätze', verben:'Trennbare Verben', präpositionen:'Präpositionen'}[mode];
+            selectedSubset = 'all';            let modeName = {wörter:'Wörter', sätze:'Sätze', verben:'Trennbare Verben', präpositionen:'Präpositionen'}[mode];
             gameModeTitleSpan.innerText = `რეჟიმი: ${modeName}`;
             
             document.getElementById('modeActionArea').classList.add('hidden');
@@ -1708,14 +1928,47 @@ function updateTimerUI(){
     
     cancelDirectionBtn.onclick = ()=>{ directionScreen.classList.add('hidden'); modeScreen.classList.remove('hidden'); };
     
+cancelSelectionBtn.onclick = () => {
+    selectionScreen.classList.add('hidden');
+    directionScreen.classList.remove('hidden');
+};
+
+selectionOptions.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-selection]');
+    if (!btn || btn.disabled) return;
+    selectedSubset = btn.dataset.selection;
+    selectionScreen.classList.add('hidden');
+
+    const dirBtn = [...document.querySelectorAll('.direction-btn')]
+        .find(b => b.getAttribute('data-dir') === gameDirection);
+
+    if (!dirBtn) {
+        showErrorPopup("მიმართულების არჩევანი ვერ მოიძებნა.");
+        directionScreen.classList.remove('hidden');
+        return;
+    }
+
+    selectionBypass = true;
+    dirBtn.click();
+});
+
 const dirBtns = document.querySelectorAll('.direction-btn');
 dirBtns.forEach(btn => {
     btn.onclick = async () => {
         let dir = btn.getAttribute('data-dir');
+        gameDirection = dir;
+
+        if (!selectionBypass &&
+            (currentMode === 'wörter' || currentMode === 'sätze' || currentMode === 'präpositionen')) {
+            openSelectionScreen();
+            return;
+        }
+
+        selectionBypass = false;
         directionScreen.classList.add('hidden');
-        
+
         // თამაშის ინიციალიზაცია
-        let ok = await startGameWithDirection(dir);
+        let ok = await startGameWithDirection(dir, selectedSubset);
         
         if (ok) {
             gameScreen.classList.remove('hidden');
