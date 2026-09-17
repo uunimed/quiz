@@ -481,6 +481,27 @@
     display: inline-block;
 }
 
+.game-time-badge {
+    background: #f1f5f9;
+    padding: 6px 12px;
+    border-radius: 8px;
+    font-weight: 600;
+    font-size: 0.95rem;
+    color: #1e293b;
+    display: inline-flex;
+    align-items: center;
+    border: 1px solid #cbd5e1;
+}
+.game-time-divider {
+    display: inline-block;
+    width: 2px;
+    height: 18px;
+    background-color: #94a3b8;
+    margin: 0 10px;
+    vertical-align: middle;
+}
+
+
     </style>
 </head>
 <body>
@@ -605,11 +626,20 @@
         <div style="text-align:center;margin-top:24px;"><button id="cancelSelectionBtn" class="back-btn">უკან</button></div>
     </div>
 
-    <!-- GAME -->
+<!-- GAME -->
     <div id="gameScreen" class="screen hidden">
-        <div style="display:flex; justify-content:space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
-            <h2 id="gameModeTitle" style="margin: 0;">რეჟიმი</h2>
-            <button id="exitGameBtn" class="back-btn">
+        <div style="display: flex; justify-content: space-between; align-items: center; width: 100%; position: relative; margin-bottom: 24px;">
+            
+            <!-- მარცხენა მხარე: მოდული და დონე/პრეპოზიცია ერთ ხაზზე -->
+            <div id="gameModeTitle" style="display: flex; align-items: center; gap: 10px; font-size: 1.1rem;">
+                რეჟიმი
+            </div>
+            
+            <!-- ზუსტად ბოქსის შუაში: დრო -->
+            <div id="gameHeaderTimeBox" style="position: absolute; left: 50%; transform: translateX(-50%);"></div>
+
+            <!-- მარჯვენა მხარე: დასრულების ღილაკი -->
+            <button id="exitGameBtn" class="back-btn" style="white-space: nowrap;">
                 <span class="svg-icon"><svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12 19 6.41z"/></svg></span>
                 დასრულება
             </button>
@@ -667,6 +697,8 @@ let gamePausedByFace = false;
 let faceCountdownInterval = null;
 let resumeCountdownIntervalFace = null;
 let faceLostTimerGlobal = null;
+let sessionTimerInterval = null;
+let sessionSecondsElapsed = 0;
 
     // Game state
     let activeGame = false;
@@ -1633,7 +1665,6 @@ async function startGameWithDirection(direction, subset = selectedSubset){
     selectedSubset = subset || 'all';
 
     // ყოველთვის თავიდან ვანიჭებთ ინდექსს rawDataset-ის რეალური პოზიციის მიხედვით.
-    // ეს მნიშვნელოვანია, რადგან Firebase-ში ნასწავლი სიტყვები სწორედ ამ ინდექსებით ინახება.
     const indexedDataset = rawDataset.map((item, idx) => ({
         ...item,
         originalIndex: idx
@@ -1645,20 +1676,18 @@ async function startGameWithDirection(direction, subset = selectedSubset){
         return false;
     }
 
-    // ნასწავლი სიტყვების გამორიცხვა ხდება მხოლოდ არჩეული დონის/Präposition-ის
-    // რეალურ rawDataset ინდექსებზე.
+    // ნასწავლი სიტყვების გამორიცხვა
     gameItems = selectedDataset.filter(item => {
         const idx = Number(item.originalIndex);
         return !learnedSet.has(idx);
     });
             
-    // თუ აღმოჩნდა, რომ ყველა სიტყვა ნასწავლია
     if(gameItems.length === 0){
         showErrorPopup("ყველა სიტყვა ნასწავლია, რის გამოც თამაში ვერ გაგრძელდება.");
         return false;
     }
 
-    // ამოურევთ მხოლოდ დარჩენილ (სწავლების პროცესში მყოფ) სიტყვებს
+    // ამოურევთ დარჩენილ სიტყვებს
     for(let i=gameItems.length-1;i>0;i--){ 
         let j=Math.floor(Math.random()*(i+1)); 
         [gameItems[i],gameItems[j]]=[gameItems[j],gameItems[i]]; 
@@ -1670,11 +1699,11 @@ async function startGameWithDirection(direction, subset = selectedSubset){
     correctAnswered = false;
     if(timerInterval) clearInterval(timerInterval);
 
-    // --- სათაურის დიზაინი მოთხოვნის მიხედვით ---
+    // --- სათაურისა და დროის ინიციალიზაცია ---
     let modeName = {wörter:'Wörter', sätze:'Sätze', verben:'Trennbare Verben', präpositionen:'Präpositionen'}[currentMode];
     
     let subInfo = '';
-    let badgeColor = '#475569'; // დეფოლტ ფერი
+    let badgeColor = '#475569';
 
     if (selectedSubset === 'all') {
         subInfo = currentMode === 'präpositionen' ? 'ყველა Präposition' : 'ყველა სიტყვა';
@@ -1693,18 +1722,79 @@ async function startGameWithDirection(direction, subset = selectedSubset){
         badgeColor = '#4a90e2';
     }
 
-    // უფრო დიდი ზომის ვერტიკალური ხაზი CSS კლასით
-    let divider = `<span class="game-title-divider"></span>`;
-    
-    // დონის/არჩევანის უჯრა შესაბამისი ფერით
     let subBadge = `<span class="game-title-badge" style="background: ${badgeColor};">${subInfo}</span>`;
 
-    gameModeTitleSpan.innerHTML = `მოდული: ${modeName} ${divider} ${subBadge}`;
+    // სესიის დროის ათვლის დაწყება
+    sessionSecondsElapsed = 0;
+    if (sessionTimerInterval) clearInterval(sessionTimerInterval);
+    sessionTimerInterval = setInterval(updateSessionHeaderTime, 1000);
+
+    updateGameHeaderTitle(modeName, subBadge);
     // -----------------------------------------------------------
 
     renderNextCard();
     
     return true;
+}
+
+function formatTimeWithDots(date) {
+    const hh = String(date.getHours()).padStart(2, '0');
+    const mm = String(date.getMinutes()).padStart(2, '0');
+    const ss = String(date.getSeconds()).padStart(2, '0');
+    return `${hh}.${mm}.${ss}`;
+}
+
+function formatElapsedSessionTime(totalSeconds) {
+    const hh = String(Math.floor(totalSeconds / 3600)).padStart(2, '0');
+    const mm = String(Math.floor((totalSeconds % 3600) / 60)).padStart(2, '0');
+    const ss = String(totalSeconds % 60).padStart(2, '0');
+    return `${hh}.${mm}.${ss}`;
+}
+
+function updateGameHeaderTitle(modeName, subBadge) {
+    let modeNamePart = `<span style="font-weight: bold; font-size: 1.5rem; color: #1e293b;">მოდული: ${modeName}</span>`;
+    let divider = `<span class="game-title-divider" style="height: 30px; margin: 0 0px;"></span>`;
+    
+    // მარცხენა მხარე: მოდული | დონე/პრეპოზიცია (შრიფტის ზომით 1rem)
+    gameModeTitleSpan.innerHTML = `${modeNamePart} ${divider} ${subBadge}`;
+    gameModeTitleSpan.style.fontSize = '1rem';
+    gameModeTitleSpan.style.display = 'flex';
+    gameModeTitleSpan.style.alignItems = 'center';
+
+    // შუა ნაწილი: დრო ზუსტად ბოქსის ცენტრში
+    const timeBox = document.getElementById('gameHeaderTimeBox');
+    if (timeBox) {
+        let currentTimeStr = formatTimeWithDots(new Date());
+        let sessionTimeStr = formatElapsedSessionTime(sessionSecondsElapsed);
+        
+        timeBox.innerHTML = `
+            <div class="game-time-badge">
+                <span>${currentTimeStr}</span>
+                <span class="game-time-divider"></span>
+                <span style="color: #0284c7;">${sessionTimeStr}</span>
+            </div>
+        `;
+    }
+}
+
+function updateSessionHeaderTime() {
+    if (!activeGame) return;
+    sessionSecondsElapsed++;
+    
+    let modeName = {wörter:'Wörter', sätze:'Sätze', verben:'Trennbare Verben', präpositionen:'Präpositionen'}[currentMode];
+    let badgeColor = '#475569';
+    if (['A1','A2','B1','B2'].includes(selectedSubset)) {
+        if (selectedSubset === 'A1') badgeColor = '#3b82f6';
+        else if (selectedSubset === 'A2') badgeColor = '#10b981';
+        else if (selectedSubset === 'B1') badgeColor = '#f59e0b';
+        else if (selectedSubset === 'B2') badgeColor = '#8b5cf6';
+    } else if (selectedSubset.startsWith('prep:')) badgeColor = '#8b5cf6';
+    else if (selectedSubset === 'all') badgeColor = '#334155';
+
+    let subInfo = selectedSubset.startsWith('prep:') ? selectedSubset.slice(5) : (selectedSubset === 'all' ? 'ყველა' : selectedSubset);
+    let subBadge = `<span class="game-title-badge" style="background: ${badgeColor};">${subInfo}</span>`;
+
+    updateGameHeaderTitle(modeName, subBadge);
 }
     
     // განახლებული ბარათის გამოტანის ფუნქცია (ანახლებს მთვლელს თამაშის დროს)
@@ -2244,6 +2334,10 @@ exitGameBtn.onclick = () => {
     if(window.faceLostTimer) {
         clearTimeout(window.faceLostTimer);
         window.faceLostTimer = null;
+    }
+    if(sessionTimerInterval) {
+        clearInterval(sessionTimerInterval);
+        sessionTimerInterval = null;
     }
     
     // წავშალოთ არსებული პოპაპები
