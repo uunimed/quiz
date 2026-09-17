@@ -1103,23 +1103,42 @@ async function loadModeData(modeKey) {
             }
 
             // 3. მონაცემების დამუშავება
-            if (modeKey === 'wörter' || modeKey === 'sätze') {
+// 3. მონაცემების დამუშავება
+            if (modeKey === 'wörter') {
+                const de = cleanNumberPrefix(cols[0] ?? '');
+                const ge = cleanNumberPrefix(cols[1] ?? '');
+                const praet = cleanNumberPrefix(cols[2] ?? '');
+                const perf = cleanNumberPrefix(cols[3] ?? '');
+                
+                if (!de || !ge) continue; 
+
+                const extra = {
+                    praet: praet,
+                    perf: perf,
+                    level: currentLevel,
+                    chapter: currentChapter
+                };
+
+                items.push({ 
+                    de: de, 
+                    ge: ge, 
+                    originalIndex: items.length, 
+                    extra 
+                });
+            }
+            else if (modeKey === 'sätze') {
                 const de = cleanNumberPrefix(cols[0] ?? '');
                 const ge = cleanNumberPrefix(cols[1] ?? '');
                 if (!de || !ge) continue; 
 
-                const extra = {};
-                if (modeKey === 'wörter' && cols.length >= 3) {
-                    extra.praet = cleanNumberPrefix(cols[1] ?? '');
-                    extra.perf = cleanNumberPrefix(cols[2] ?? '');
-                }
-
-                extra.level = currentLevel;
-                extra.chapter = currentChapter;
+                const extra = {
+                    level: currentLevel,
+                    chapter: currentChapter
+                };
 
                 items.push({ 
-                    de: modeKey === 'wörter' ? cleanNumberPrefix(cols[0] ?? '') : de, 
-                    ge: modeKey === 'wörter' ? cleanNumberPrefix(cols[1] ?? '') : ge, 
+                    de: de, 
+                    ge: ge, 
                     originalIndex: items.length, 
                     extra 
                 });
